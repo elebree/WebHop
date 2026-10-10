@@ -15,6 +15,11 @@
     <RepositoryUrl>https://github.com/elebree/WebHop</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
 
+    <!-- Same C# on every target: the default for net7.0/net8.0 is older than the code uses. net7.0
+         is out of support but still targeted on purpose, so don't warn about it. -->
+    <LangVersion>latest</LangVersion>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+
     <!-- Source Link (built into the SDK) plus a .snupkg symbol package, so consumers can step into
          the package sources. -->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -22,6 +27,15 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
+
+  <!-- A package's nuget.org readme is the README.md next to its csproj. It's separate from the repo
+       README, whose relative links and images don't work on nuget.org. -->
+  <PropertyGroup Condition="Exists('$(MSBuildProjectDirectory)/README.md')">
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)/README.md')">
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
 
   <!-- Reproducible builds on CI only: it maps source paths to /_/, which would break local
        debugging and coverage paths. -->

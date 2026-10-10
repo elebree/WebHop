@@ -1,12 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+    <TargetFrameworks>net7.0;net8.0;net9.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
     <PackageId>WebHop.Core</PackageId>
-    <Description>Shared primitives for WebHop: the tunnel stream, header names and constants used by the gateway and server packages.</Description>
+    <Description>Shared types for WebHop: the tunnel stream, header names and constants. Installed with WebHop.Origin and WebHop.Gateway; you do not need to reference it directly.</Description>
   </PropertyGroup>
 
 </Project>

@@ -80,7 +80,7 @@ jobs:
       - name: Archive
         run: |
           mkdir dist
-          name="webhop-${GITHUB_REF_NAME}-${{ matrix.rid }}"
+          name="webhop-${{ matrix.rid }}"   # no version, so releases/latest/download/<name> stays a stable link
           if [[ "${{ matrix.rid }}" == win-* ]]; then
             7z a "dist/$name.zip" ./publish/webhop.exe
           else
