@@ -1,15 +1,5 @@
 namespace WebHop.Tests.Infrastructure
 {
-    /// <summary>
-    /// Tests that change or depend on process-wide environment variables (WEBHOP_AUTHTOKEN).
-    /// They run on their own, after the parallel tests.
-    /// </summary>
-    [CollectionDefinition(Name, DisableParallelization = true)]
-    public sealed class EnvironmentVariablesCollection
-    {
-        public const string Name = "Environment variables";
-    }
-
     /// <summary>Sets environment variables for the duration of a test and restores them afterwards.</summary>
     internal sealed class EnvironmentVariableScope : IDisposable
     {

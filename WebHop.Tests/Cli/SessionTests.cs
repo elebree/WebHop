@@ -4,15 +4,21 @@ namespace WebHop.Tests.Cli
 {
     public class SessionTests
     {
-        private readonly Session session = new();
+        private Session session = null!;
 
-        [Fact]
-        public void There_are_no_percentiles_before_the_first_request()
+        [SetUp]
+        public void SetUp()
         {
-            Assert.Null(session.Percentiles());
+            session = new Session();
         }
 
-        [Fact]
+        [Test]
+        public void There_are_no_percentiles_before_the_first_request()
+        {
+            Assert.That(session.Percentiles(), Is.Null);
+        }
+
+        [Test]
         public void Percentiles_are_computed_over_request_durations()
         {
             foreach (var ms in new[] { 100, 10, 90, 20, 80, 30, 70, 40, 60, 50 })
@@ -20,34 +26,34 @@ namespace WebHop.Tests.Cli
 
             var (p50, p90) = session.Percentiles()!.Value;
 
-            Assert.Equal(50, p50);
-            Assert.Equal(90, p90);
+            Assert.That(p50, Is.EqualTo(50));
+            Assert.That(p90, Is.EqualTo(90));
         }
 
-        [Fact]
+        [Test]
         public void Recent_requests_are_listed_newest_first()
         {
             Complete(1, "/first");
             Complete(1, "/second");
             Complete(1, "/third");
 
-            Assert.Equal(["/third", "/second"], session.RecentRequests(2).Select(r => r.Path));
+            Assert.That(session.RecentRequests(2).Select(r => r.Path), Is.EqualTo(new[] { "/third", "/second" }));
         }
 
-        [Fact]
+        [Test]
         public void Totals_and_requests_in_flight_are_counted()
         {
             session.BeginRequest();
             session.BeginRequest();
-            Assert.Equal(2, session.InFlight);
+            Assert.That(session.InFlight, Is.EqualTo(2));
 
             session.EndRequest(Entry(5, "/"));
 
-            Assert.Equal(1, session.InFlight);
-            Assert.Equal(1, session.Total);
+            Assert.That(session.InFlight, Is.EqualTo(1));
+            Assert.That(session.Total, Is.EqualTo(1));
         }
 
-        [Fact]
+        [Test]
         public void Every_change_is_visible_to_the_screen_and_to_listeners()
         {
             var completed = new List<RequestEntry>();
@@ -57,9 +63,9 @@ namespace WebHop.Tests.Cli
             Complete(5);
             session.ReportError("boom");
 
-            Assert.True(session.Version > before);
-            Assert.Single(completed);
-            Assert.Equal("boom", session.LastError);
+            Assert.That(session.Version > before, Is.True);
+            Assert.That(completed, Has.Count.EqualTo(1));
+            Assert.That(session.LastError, Is.EqualTo("boom"));
         }
 
         private void Complete(int milliseconds, string path = "/")

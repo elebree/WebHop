@@ -6,63 +6,62 @@ using WebHop.Tests.Infrastructure;
 
 namespace WebHop.Tests.Gateway
 {
-    [Collection(EnvironmentVariablesCollection.Name)]
+    [NonParallelizable]
     public class TunnelAuthorizationTests
     {
-        [Fact]
+        [Test]
         public void Without_an_auth_token_no_tunnel_is_accepted()
         {
             using var env = new EnvironmentVariableScope().Set(Constants.AuthTokenEnvironmentVariable, null);
             var authorization = Create(setting: null);
 
-            Assert.False(authorization.IsConfigured);
-            Assert.False(authorization.IsAuthorized(Context("Bearer anything")));
-            Assert.False(authorization.IsAuthorized(Context(null)));
+            Assert.That(authorization.IsConfigured, Is.False);
+            Assert.That(authorization.IsAuthorized(Context("Bearer anything")), Is.False);
+            Assert.That(authorization.IsAuthorized(Context(null)), Is.False);
         }
 
-        [Theory]
-        [InlineData("Bearer s3cr3t-token", true)]
-        [InlineData("bearer s3cr3t-token", true)]
-        [InlineData("Bearer  s3cr3t-token ", true)]
-        [InlineData("Bearer wrong", false)]
-        [InlineData("Bearer s3cr3t-token-longer", false)]
-        [InlineData("Basic s3cr3t-token", false)]
-        [InlineData("s3cr3t-token", false)]
-        [InlineData(null, false)]
+        [TestCase("Bearer s3cr3t-token", true)]
+        [TestCase("bearer s3cr3t-token", true)]
+        [TestCase("Bearer  s3cr3t-token ", true)]
+        [TestCase("Bearer wrong", false)]
+        [TestCase("Bearer s3cr3t-token-longer", false)]
+        [TestCase("Basic s3cr3t-token", false)]
+        [TestCase("s3cr3t-token", false)]
+        [TestCase(null, false)]
         public void Only_the_configured_token_is_accepted(string? header, bool accepted)
         {
             using var env = new EnvironmentVariableScope().Set(Constants.AuthTokenEnvironmentVariable, null);
             var authorization = Create(setting: "s3cr3t-token");
 
-            Assert.True(authorization.IsConfigured);
-            Assert.Equal(accepted, authorization.IsAuthorized(Context(header)));
+            Assert.That(authorization.IsConfigured, Is.True);
+            Assert.That(authorization.IsAuthorized(Context(header)), Is.EqualTo(accepted));
         }
 
-        [Fact]
+        [Test]
         public void The_environment_variable_is_used_when_the_setting_is_missing()
         {
             using var env = new EnvironmentVariableScope().Set(Constants.AuthTokenEnvironmentVariable, "from-env");
             var authorization = Create(setting: null);
 
-            Assert.True(authorization.IsAuthorized(Context("Bearer from-env")));
+            Assert.That(authorization.IsAuthorized(Context("Bearer from-env")), Is.True);
         }
 
-        [Fact]
+        [Test]
         public void The_setting_wins_over_the_environment_variable()
         {
             using var env = new EnvironmentVariableScope().Set(Constants.AuthTokenEnvironmentVariable, "from-env");
             var authorization = Create(setting: "from-setting");
 
-            Assert.True(authorization.IsAuthorized(Context("Bearer from-setting")));
-            Assert.False(authorization.IsAuthorized(Context("Bearer from-env")));
+            Assert.That(authorization.IsAuthorized(Context("Bearer from-setting")), Is.True);
+            Assert.That(authorization.IsAuthorized(Context("Bearer from-env")), Is.False);
         }
 
-        [Fact]
+        [Test]
         public void Server_options_read_the_same_environment_variable()
         {
             using var env = new EnvironmentVariableScope().Set(Constants.AuthTokenEnvironmentVariable, "from-env");
 
-            Assert.Equal("from-env", new WebHopServerOptions().AuthToken);
+            Assert.That(new WebHopServerOptions().AuthToken, Is.EqualTo("from-env"));
         }
 
         private static TunnelAuthorization Create(string? setting)
@@ -73,7 +72,7 @@ namespace WebHop.Tests.Gateway
             return new TunnelAuthorization(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
         }
 
-        [Fact]
+        [Test]
         public void A_token_in_the_websocket_subprotocol_is_accepted()
         {
             using var env = new EnvironmentVariableScope().Set(Constants.AuthTokenEnvironmentVariable, null);
@@ -83,7 +82,7 @@ namespace WebHop.Tests.Gateway
             context.Request.Headers["Sec-WebSocket-Protocol"] =
                 Constants.WebHopSubprotocol + ", " + Constants.TokenSubprotocolPrefix + Base64Url("s3cr3t-token");
 
-            Assert.True(authorization.IsAuthorized(context));
+            Assert.That(authorization.IsAuthorized(context), Is.True);
         }
 
         private static string Base64Url(string value) =>

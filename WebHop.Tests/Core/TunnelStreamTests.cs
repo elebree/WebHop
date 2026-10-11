@@ -9,7 +9,7 @@ namespace WebHop.Tests.Core
     {
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
-        [Fact]
+        [Test]
         public async Task Bytes_written_on_one_side_are_read_on_the_other()
         {
             await using var pair = await WebSocketPair.CreateAsync();
@@ -18,10 +18,10 @@ namespace WebHop.Tests.Core
 
             await server.WriteAsync("hello"u8.ToArray());
 
-            Assert.Equal("hello", await ReadStringAsync(client, 5));
+            Assert.That(await ReadStringAsync(client, 5), Is.EqualTo("hello"));
         }
 
-        [Fact]
+        [Test]
         public async Task Large_payloads_arrive_complete_and_in_order()
         {
             await using var pair = await WebSocketPair.CreateAsync();
@@ -38,10 +38,10 @@ namespace WebHop.Tests.Core
             await client.ReadExactlyAsync(received).AsTask().WaitAsync(Timeout);
             await writing;
 
-            Assert.Equal(payload, received);
+            Assert.That(received, Is.EqualTo(payload));
         }
 
-        [Fact]
+        [Test]
         public async Task A_cancelled_read_does_not_break_the_stream()
         {
             // Regression: cancelling a WebSocket receive aborts the socket, and Kestrel and
@@ -51,14 +51,14 @@ namespace WebHop.Tests.Core
             await using var client = new TunnelStream(pair.Client);
 
             using (var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100)))
-                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.ReadAsync(new byte[16], cts.Token).AsTask());
+                await Assert.CatchAsync<OperationCanceledException>(() => client.ReadAsync(new byte[16], cts.Token).AsTask());
 
-            Assert.Equal(WebSocketState.Open, pair.Client.State);
+            Assert.That(pair.Client.State, Is.EqualTo(WebSocketState.Open));
             await server.WriteAsync("still alive"u8.ToArray());
-            Assert.Equal("still alive", await ReadStringAsync(client, 11));
+            Assert.That(await ReadStringAsync(client, 11), Is.EqualTo("still alive"));
         }
 
-        [Fact]
+        [Test]
         public async Task A_zero_byte_read_waits_for_data_without_consuming_it()
         {
             await using var pair = await WebSocketPair.CreateAsync();
@@ -66,14 +66,14 @@ namespace WebHop.Tests.Core
             await using var client = new TunnelStream(pair.Client);
 
             var waiting = client.ReadAsync(Memory<byte>.Empty).AsTask();
-            Assert.False(waiting.IsCompleted);
+            Assert.That(waiting.IsCompleted, Is.False);
 
             await server.WriteAsync("data"u8.ToArray());
-            Assert.Equal(0, await waiting.WaitAsync(Timeout));
-            Assert.Equal("data", await ReadStringAsync(client, 4));
+            Assert.That(await waiting.WaitAsync(Timeout), Is.EqualTo(0));
+            Assert.That(await ReadStringAsync(client, 4), Is.EqualTo("data"));
         }
 
-        [Fact]
+        [Test]
         public async Task Disposing_one_side_ends_the_other_sides_reads()
         {
             await using var pair = await WebSocketPair.CreateAsync();
@@ -82,11 +82,11 @@ namespace WebHop.Tests.Core
 
             await server.DisposeAsync();
 
-            Assert.Equal(0, await client.ReadAsync(new byte[16]).AsTask().WaitAsync(Timeout));
-            Assert.True(server.Closed.IsCompleted);
+            Assert.That(await client.ReadAsync(new byte[16]).AsTask().WaitAsync(Timeout), Is.EqualTo(0));
+            Assert.That(server.Closed.IsCompleted, Is.True);
         }
 
-        [Fact]
+        [Test]
         public async Task Read_ahead_hands_early_data_to_the_first_read()
         {
             await using var pair = await WebSocketPair.CreateAsync();
@@ -97,10 +97,10 @@ namespace WebHop.Tests.Core
             await server.WriteAsync("early"u8.ToArray());
             await readAhead.WaitAsync(Timeout);
 
-            Assert.Equal("early", await ReadStringAsync(client, 5));
+            Assert.That(await ReadStringAsync(client, 5), Is.EqualTo("early"));
         }
 
-        [Fact]
+        [Test]
         public async Task Read_ahead_completes_when_the_peer_closes_an_idle_stream()
         {
             // The gateway relies on this to drop tunnels that close while waiting in its pool
@@ -112,7 +112,7 @@ namespace WebHop.Tests.Core
             await server.DisposeAsync();
 
             var result = await readAhead.WaitAsync(Timeout);
-            Assert.Equal(WebSocketMessageType.Close, result.MessageType);
+            Assert.That(result.MessageType, Is.EqualTo(WebSocketMessageType.Close));
         }
 
         private static async Task<string> ReadStringAsync(Stream stream, int length)

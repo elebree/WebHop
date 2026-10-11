@@ -8,7 +8,7 @@ namespace WebHop.Tests.Origin
 {
     public class ForwardedHeadersApplicationTests
     {
-        [Fact]
+        [Test]
         public void Scheme_client_address_and_request_id_come_from_the_gateway_headers()
         {
             var features = Features(new()
@@ -20,24 +20,24 @@ namespace WebHop.Tests.Origin
 
             new ForwardedHeadersApplication<IFeatureCollection>(new PassThroughApplication()).CreateContext(features);
 
-            Assert.Equal("https", features.Get<IHttpRequestFeature>()!.Scheme);
-            Assert.Equal(IPAddress.Parse("203.0.113.7"), features.Get<IHttpConnectionFeature>()!.RemoteIpAddress);
-            Assert.Equal(4567, features.Get<IHttpConnectionFeature>()!.RemotePort);
-            Assert.Equal("gateway-request-1", features.Get<IHttpRequestIdentifierFeature>()!.TraceIdentifier);
+            Assert.That(features.Get<IHttpRequestFeature>()!.Scheme, Is.EqualTo("https"));
+            Assert.That(features.Get<IHttpConnectionFeature>()!.RemoteIpAddress, Is.EqualTo(IPAddress.Parse("203.0.113.7")));
+            Assert.That(features.Get<IHttpConnectionFeature>()!.RemotePort, Is.EqualTo(4567));
+            Assert.That(features.Get<IHttpRequestIdentifierFeature>()!.TraceIdentifier, Is.EqualTo("gateway-request-1"));
         }
 
-        [Fact]
+        [Test]
         public void IPv6_client_addresses_are_understood()
         {
             var features = Features(new() { [Headers.XForwardedFor] = "[2001:db8::1]:443" });
 
             new ForwardedHeadersApplication<IFeatureCollection>(new PassThroughApplication()).CreateContext(features);
 
-            Assert.Equal(IPAddress.Parse("2001:db8::1"), features.Get<IHttpConnectionFeature>()!.RemoteIpAddress);
-            Assert.Equal(443, features.Get<IHttpConnectionFeature>()!.RemotePort);
+            Assert.That(features.Get<IHttpConnectionFeature>()!.RemoteIpAddress, Is.EqualTo(IPAddress.Parse("2001:db8::1")));
+            Assert.That(features.Get<IHttpConnectionFeature>()!.RemotePort, Is.EqualTo(443));
         }
 
-        [Fact]
+        [Test]
         public void Without_gateway_headers_nothing_changes()
         {
             var features = Features([]);
@@ -45,11 +45,11 @@ namespace WebHop.Tests.Origin
 
             new ForwardedHeadersApplication<IFeatureCollection>(new PassThroughApplication()).CreateContext(features);
 
-            Assert.Equal("http", features.Get<IHttpRequestFeature>()!.Scheme);
-            Assert.Equal(IPAddress.Loopback, features.Get<IHttpConnectionFeature>()!.RemoteIpAddress);
+            Assert.That(features.Get<IHttpRequestFeature>()!.Scheme, Is.EqualTo("http"));
+            Assert.That(features.Get<IHttpConnectionFeature>()!.RemoteIpAddress, Is.EqualTo(IPAddress.Loopback));
         }
 
-        [Fact]
+        [Test]
         public void An_unparseable_client_address_is_ignored()
         {
             var features = Features(new() { [Headers.XForwardedFor] = "not an address" });
@@ -57,7 +57,7 @@ namespace WebHop.Tests.Origin
 
             new ForwardedHeadersApplication<IFeatureCollection>(new PassThroughApplication()).CreateContext(features);
 
-            Assert.Equal(IPAddress.Loopback, features.Get<IHttpConnectionFeature>()!.RemoteIpAddress);
+            Assert.That(features.Get<IHttpConnectionFeature>()!.RemoteIpAddress, Is.EqualTo(IPAddress.Loopback));
         }
 
         private static FeatureCollection Features(Dictionary<string, string> headers)
