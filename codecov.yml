@@ -11,3 +11,7 @@ coverage:
 comment:
   layout: "diff, files"
   require_changes: true
+
+# Source-generated code (System.Text.Json contexts) lands in obj/ and isn't ours to test.
+ignore:
+  - "**/obj/**"
