@@ -26,7 +26,48 @@ dotnet publish WebHop.Gateway.Host -c Release -o gateway
 Deploy the `gateway` folder to a web app on .NET 9, with Visual Studio's Publish, `az webapp deploy` or any other way. In the web app's configuration:
 
 - enable **WebSockets**;
-- add `WEBHOP_AUTHTOKEN` as an application setting.
+- add `WEBHOP_AUTHTOKEN` as an application setting;
+- on Basic and higher plans, turn on **Always on**, so the app isn't unloaded while idle.
+
+### With the Azure CLI
+
+From the repository root, after `az login`. Pick your own names for the resource group, plan and app; the app name becomes the `<your-app>.azurewebsites.net` host name, so it must be globally unique.
+
+1. Create a Windows web app on .NET 9. `web.config` only applies on Windows, where it lets IIS pass URLs the gateway must forward:
+
+   ```sh
+   az group create --name webhop-rg --location westeurope
+   az appservice plan create --name webhop-plan --resource-group webhop-rg --sku B1
+   az webapp create --name <your-app> --resource-group webhop-rg --plan webhop-plan --runtime "dotnet:9"
+   ```
+
+2. Enable WebSockets and Always on, require HTTPS, and set the auth token:
+
+   ```sh
+   az webapp config set --name <your-app> --resource-group webhop-rg --web-sockets-enabled true --always-on true
+   az webapp update --name <your-app> --resource-group webhop-rg --https-only true
+   az webapp config appsettings set --name <your-app> --resource-group webhop-rg --settings WEBHOP_AUTHTOKEN=<token>
+   ```
+
+   On the Free (`F1`) and Shared (`D1`) plans, leave out `--always-on true`; those plans don't support it.
+
+3. Publish, zip the output and deploy it:
+
+   ```sh
+   dotnet publish WebHop.Gateway.Host -c Release -o gateway
+   cd gateway && zip -r ../gateway.zip . && cd ..
+   az webapp deploy --name <your-app> --resource-group webhop-rg --src-path gateway.zip --type zip
+   ```
+
+   In PowerShell, zip with `Compress-Archive -Path gateway/* -DestinationPath gateway.zip -Force` instead. The zip must hold the files themselves, not the `gateway` folder.
+
+To update the gateway later, repeat step 3. If the gateway doesn't pick up a changed setting or deployment, restart it with `az webapp restart --name <your-app> --resource-group webhop-rg`.
+
+### With Visual Studio
+
+Right-click **WebHop.Gateway.Host** > **Publish** > **Azure** > **Azure App Service (Windows)**, and pick or create the web app. Visual Studio builds and deploys the app; enable WebSockets and set `WEBHOP_AUTHTOKEN` in the web app's configuration in the Azure portal as above.
+
+### After deploying
 
 Servers then connect to `https://<your-app>.azurewebsites.net/`. Every tunnel is one WebSocket, and the Free and Shared plans cap WebSockets; see [Azure App Service](../WebHop.Gateway/README.md#azure-app-service) for how the gateway handles that.
 
