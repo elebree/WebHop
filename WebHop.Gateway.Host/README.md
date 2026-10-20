@@ -73,18 +73,26 @@ Servers then connect to `https://<your-app>.azurewebsites.net/`. Every tunnel is
 
 ## Docker
 
-The compose file in the repository root runs the gateway on http://localhost:8080:
+Prebuilt images for linux/amd64 and linux/arm64 are published as `elebree/webhop` on Docker Hub and `ghcr.io/elebree/webhop` on GitHub. Each release is tagged with its version (`2.1.0`), its minor version (`2.1`) and `latest`; `edge` is the newest build of `main`. To run the gateway on http://localhost:8080:
+
+```sh
+docker run -d -p 8080:8080 -e WEBHOP_AUTHTOKEN=<token> --restart unless-stopped elebree/webhop
+```
+
+The container serves plain http, so on a public host put a TLS-terminating proxy in front of it; the proxy must pass WebSocket upgrades on `/webhop`.
+
+From a clone, the compose file in the repository root builds the image and runs it the same way:
 
 ```sh
 WEBHOP_AUTHTOKEN=<token> docker compose up --build -d
 ```
 
-`WEBHOP_AUTHTOKEN` can also go in a `.env` file next to `docker-compose.yml`. The container serves plain http, so on a public host put a TLS-terminating proxy in front of it; the proxy must pass WebSocket upgrades on `/webhop`.
+`WEBHOP_AUTHTOKEN` can also go in a `.env` file next to `docker-compose.yml`.
 
 To build the image on its own, build from the repository root, since the Dockerfile needs the sibling projects:
 
 ```sh
-docker build -f WebHop.Gateway.Host/Dockerfile -t webhop-gateway .
+docker build -f WebHop.Gateway.Host/Dockerfile -t webhop .
 ```
 
 ## Running locally

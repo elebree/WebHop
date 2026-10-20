@@ -74,6 +74,31 @@ Flags can come in any order, before or after the command, as `--flag value` or `
 
 The settings are saved in `%APPDATA%\webhop\webhop.json` on Windows and `~/.config/webhop/webhop.json` elsewhere.
 
+## Docker
+
+The `elebree/webhop-cli` image on Docker Hub (also `ghcr.io/elebree/webhop-cli`) runs `webhop` on linux/amd64 and linux/arm64, for tunnels that run unattended next to other containers. Each release is tagged with its version (`2.1.0`), its minor version (`2.1`) and `latest`; `edge` is the newest build of `main`.
+
+Pass the gateway and the auth token as environment variables. Inside a container `localhost` is the container itself, so reach a server on the host as `host.docker.internal` (on Linux, add `--add-host=host.docker.internal:host-gateway`):
+
+```sh
+docker run --rm -it -e WEBHOP_URL=https://my-gateway.example.com/ -e WEBHOP_AUTHTOKEN=<token> elebree/webhop-cli http http://host.docker.internal:5000
+```
+
+`-it` shows the live screen; without it, `webhop` prints log lines. In Docker Compose, it exposes another service of the stack by its service name:
+
+```yaml
+services:
+  app:
+    image: my-app
+  tunnel:
+    image: elebree/webhop-cli
+    command: http http://app:8080
+    environment:
+      WEBHOP_URL: https://my-gateway.example.com/
+      WEBHOP_AUTHTOKEN: ${WEBHOP_AUTHTOKEN}
+    restart: unless-stopped
+```
+
 ## Notes
 
 - The local server sees the public Host header and `X-Forwarded-For/Proto/Host`.

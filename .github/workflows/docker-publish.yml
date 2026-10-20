@@ -1,0 +1,172 @@
+name: Docker images
+
+# Builds the gateway (webhop, from WebHop.Gateway.Host) and the CLI (webhop-cli, from WebHop.CLI)
+# images and publishes them to GitHub Container Registry and Docker Hub.
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+    # Only what the images are built from. Path filters don't apply to tag pushes, so every release
+    # still gets its images.
+    paths:
+      - Directory.Build.props
+      - .dockerignore
+      - WebHop.Core/**
+      - WebHop.Gateway/**
+      - WebHop.Gateway.Host/**
+      - WebHop.Origin/**
+      - WebHop.CLI/**
+      - .github/workflows/docker-publish.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - Directory.Build.props
+      - .dockerignore
+      - WebHop.Core/**
+      - WebHop.Gateway/**
+      - WebHop.Gateway.Host/**
+      - WebHop.Origin/**
+      - WebHop.CLI/**
+      - .github/workflows/docker-publish.yml
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # project holds the Dockerfile and the README that becomes the Docker Hub description.
+        # description is also the Docker Hub short description, which allows 100 characters.
+        include:
+          - image: webhop
+            project: WebHop.Gateway.Host
+            title: WebHop Gateway
+            description: Public gateway that forwards HTTP to servers behind NAT through WebSocket tunnels
+          - image: webhop-cli
+            project: WebHop.CLI
+            title: WebHop CLI
+            description: Exposes any local HTTP server through your own WebHop gateway
+    env:
+      IMAGE: ${{ matrix.image }}
+      # Empty when the Docker Hub secrets are not configured; everything below degrades
+      # gracefully to publishing on GHCR only. The secrets context cannot be read from an
+      # `if:` directly, which is why it is mapped here.
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      # The Docker Hub namespace is not necessarily the login name, so it is spelled out
+      # rather than derived from the username.
+      DOCKERHUB_REPOSITORY: elebree/${{ matrix.image }}
+      # Pull requests only validate that the images still build. Nothing is published,
+      # which also means forks never need registry credentials.
+      PUBLISH: ${{ github.event_name == 'push' }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-qemu-action@v4
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Work out which registries to target
+        id: images
+        run: |
+          images="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${IMAGE}"
+          if [ -n "$DOCKERHUB_USERNAME" ]; then
+            images="${images}"$'\n'"docker.io/${DOCKERHUB_REPOSITORY}"
+          else
+            echo "::notice::DOCKERHUB_USERNAME is not set - publishing to GHCR only."
+          fi
+          {
+            echo "list<<IMAGES_EOF"
+            echo "$images"
+            echo "IMAGES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: env.PUBLISH == 'true' && env.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # v1.2.3 -> :1.2.3, :1.2, :latest (prereleases like v1.2.3-preview.1 only get :1.2.3-preview.1)
+      # main   -> :edge
+      # always -> :sha-<short sha>
+      - name: Derive tags and labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.images.outputs.list }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=edge,branch=main
+            type=sha
+          labels: |
+            org.opencontainers.image.title=${{ matrix.title }}
+            org.opencontainers.image.description=${{ matrix.description }}
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build and publish
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.project }}/Dockerfile
+          # Cross-compiled rather than emulated, so arm64 costs very little extra time.
+          # Pull requests build one architecture, since they only prove the image still builds.
+          platforms: ${{ env.PUBLISH == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Releases build with the tag's version (v2.1.0 -> 2.1.0), like the release workflow;
+          # other builds keep the version from Directory.Build.props.
+          build-args: |
+            VERSION=${{ github.ref_type == 'tag' && steps.meta.outputs.version || '' }}
+          # One cache per image, or the two builds would keep evicting each other's layers.
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+          # Keeps the registry tag listing free of the "unknown/unknown" attestation entries.
+          provenance: false
+
+      # The README links to sibling files and projects by relative path. The description action's own
+      # URL completion resolves those against the repository root, which is wrong for a README in a
+      # subfolder, so they are made absolute here against the README's folder at the released tag.
+      # Browsers resolve the ../ segments when the link is followed.
+      - name: Prepare the Docker Hub description
+        if: env.PUBLISH == 'true' && env.DOCKERHUB_USERNAME != '' && startsWith(github.ref, 'refs/tags/')
+        env:
+          BASE: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/${{ matrix.project }}/
+        run: >
+          perl -pe 's{\]\((?!https?:|#|/)}{]($ENV{BASE}}g'
+          "${{ matrix.project }}/README.md" > "$RUNNER_TEMP/dockerhub-readme.md"
+
+      # The Hub overview page is not populated by pushing an image - only the API sets it, so
+      # without this the page stays blank while GHCR shows the README via the source label.
+      # Releases only, so the published description always matches a released version.
+      # Never fails the job: the images are already pushed by this point, and a cosmetic
+      # description update is not worth turning a release red.
+      - name: Sync the Docker Hub description
+        if: env.PUBLISH == 'true' && env.DOCKERHUB_USERNAME != '' && startsWith(github.ref, 'refs/tags/')
+        continue-on-error: true
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.DOCKERHUB_REPOSITORY }}
+          readme-filepath: ${{ runner.temp }}/dockerhub-readme.md
+          short-description: ${{ matrix.description }}
