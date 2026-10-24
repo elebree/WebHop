@@ -2,7 +2,7 @@
 
 Expose any local HTTP server through your own [WebHop](https://github.com/elebree/WebHop) gateway, much like `ngrok http`. The local server needs no WebHop code and doesn't have to be .NET. `webhop` opens no listening port: it only connects out to the gateway and to your local server.
 
-You need a running gateway; see [WebHop.Gateway](https://www.nuget.org/packages/WebHop.Gateway).
+You need a running gateway; see [Deploy a gateway](https://github.com/elebree/WebHop#1-deploy-a-gateway).
 
 ## Install
 
@@ -63,7 +63,7 @@ The commands and flags follow ngrok's.
 |---|---|
 | `--url` | Gateway URL, which is also the public URL. Default: `WEBHOP_URL`, then the saved gateway |
 | `--authtoken` | The gateway's auth token. Default: `WEBHOP_AUTHTOKEN`, then the saved auth token |
-| `--host-header=rewrite` | Send `Host: localhost:<port>`, for dev servers that reject other hosts (Vite, webpack dev server) |
+| `--host-header` | Host header sent to the local server. `rewrite` sends the target's own, such as `localhost:5000`, for dev servers that reject other hosts (Vite, webpack dev server); any other value is sent as is. Default: the public host |
 | `--log=stdout\|stderr\|<file>` | `stdout`/`stderr` print log lines instead of the live screen (also used when output is redirected); a file path keeps the screen and writes the log to the file |
 | `--log-level=debug\|info\|warn\|error\|crit` | How much to log (default `info`) |
 | `--log-format=term\|json` | Log line format |
@@ -104,7 +104,7 @@ services:
 - The local server sees the public Host header and `X-Forwarded-For/Proto/Host`.
 - Self-signed certificates are accepted for local https targets.
 - If the local server isn't running, visitors get a 502 page that says so.
-- From a clone of the repository, run it with `dotnet run --project WebHop.CLI -- http 5000`.
+- From a clone of the repository, run it with `dotnet run --project WebHop.CLI -f net10.0 -- http 5000`.
 
 ## More
 

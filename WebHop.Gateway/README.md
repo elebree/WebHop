@@ -25,7 +25,7 @@ GatewayApp.Create(args).Run();
 
 `GatewayApp` is the complete gateway: unlimited request body size, the WebHop middleware, and a 503 while no app is connected.
 
-For a gateway ready to deploy without writing code, with error pages for visitors and the IIS settings Azure App Service needs, publish [WebHop.Gateway.Host](https://github.com/elebree/WebHop/tree/main/WebHop.Gateway.Host) from the repository.
+For a gateway ready to deploy without writing code, with error pages for visitors and the IIS settings Azure App Service needs, use [WebHop.Gateway.Host](https://github.com/elebree/WebHop/tree/main/WebHop.Gateway.Host): run its Docker image, `elebree/webhop`, or publish it from the repository.
 
 ## In an existing app
 
@@ -68,6 +68,8 @@ Forwarded requests carry `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded
 - Set `WEBHOP_AUTHTOKEN` as an application setting.
 - Point your apps at `https://<your-app>.azurewebsites.net/`.
 - Mind the plan's WebSocket limit per instance: Free allows 5, Shared 35, Basic 350, Standard and up have no fixed limit. Every tunnel is one WebSocket, and so is every WebSocket your visitors open. On Free and Shared the gateway tells apps how many tunnels each may open (60% of the limit), leaving room for visitors; `WebHop:MaxWebSockets` overrides the detected limit.
+
+Step by step, with the Azure CLI or Visual Studio: [deploying WebHop.Gateway.Host](https://github.com/elebree/WebHop/tree/main/WebHop.Gateway.Host#azure-app-service).
 
 ## More
 

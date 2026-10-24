@@ -7,7 +7,7 @@ browser ──HTTP──▶ WebHop gateway ◀──WebSocket tunnels── your
                   (public host)                          (behind NAT, no open ports)
 ```
 
-You need a running gateway; see [WebHop.Gateway](https://www.nuget.org/packages/WebHop.Gateway).
+You need a running gateway; see [Deploy a gateway](https://github.com/elebree/WebHop#1-deploy-a-gateway).
 
 ## Usage
 

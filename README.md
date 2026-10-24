@@ -10,16 +10,12 @@
   <a href="https://www.nuget.org/packages/WebHop.Origin"><img src="https://img.shields.io/nuget/v/WebHop.Origin?label=Origin" alt="WebHop.Origin on NuGet"></a>
   <a href="https://www.nuget.org/packages/WebHop.Gateway"><img src="https://img.shields.io/nuget/v/WebHop.Gateway?label=Gateway" alt="WebHop.Gateway on NuGet"></a>
   <a href="https://www.nuget.org/packages/webhop"><img src="https://img.shields.io/nuget/v/webhop?label=webhop%20tool" alt="webhop dotnet tool on NuGet"></a>
+  <a href="https://hub.docker.com/r/elebree/webhop"><img src="https://img.shields.io/docker/v/elebree/webhop?sort=semver&label=Docker" alt="Gateway image on Docker Hub"></a>
   <img src="https://img.shields.io/badge/.NET-7.0%20%7C%208.0%20%7C%209.0%20%7C%2010.0-512BD4" alt=".NET 7.0 | 8.0 | 9.0 | 10.0">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/elebree/WebHop" alt="MIT license"></a>
 </p>
 
 Expose a web server behind NAT or a firewall on a public URL, through a gateway you host yourself, like a self-hosted ngrok. The server opens WebSocket tunnels out to the gateway, so it needs no inbound ports, and the gateway forwards public HTTP traffic through them.
-
-```
-browser ──HTTP──▶ gateway ◀──WebSocket tunnels── your server
-                  (public host)                  (behind NAT, no open ports)
-```
 
 Everything HTTP passes through: streamed bodies of any size, WebSockets, server-sent events and client disconnects.
 
@@ -33,22 +29,20 @@ Everything HTTP passes through: streamed bodies of any size, WebSockets, server-
 
 The gateway runs on a public host with WebSockets enabled. Pick an auth token (any long random string) and set it on the gateway as `WEBHOP_AUTHTOKEN`. Only servers that present it can open tunnels; public visitors don't need it.
 
-[WebHop.Gateway.Host](WebHop.Gateway.Host/README.md) is the ready-to-deploy gateway, with error pages for visitors and the IIS settings Azure App Service needs. Publish it from a clone of this repository (needs the .NET 10 SDK):
+[WebHop.Gateway.Host](WebHop.Gateway.Host/README.md) is the ready-to-deploy gateway, with error pages for visitors and the IIS settings Azure App Service needs. Run its Docker image on your host (it serves http on port 8080; put a TLS-terminating proxy in front):
+
+```sh
+docker run -d -p 8080:8080 -e WEBHOP_AUTHTOKEN=<token> --restart unless-stopped elebree/webhop
+```
+
+Or publish it from a clone of this repository (needs the .NET 10 SDK) and deploy the `gateway` folder like any ASP.NET Core app:
 
 ```sh
 git clone https://github.com/elebree/WebHop.git
 dotnet publish WebHop/WebHop.Gateway.Host -c Release -o gateway
 ```
 
-and deploy the `gateway` folder like any ASP.NET Core app. On **Azure App Service**, enable WebSockets in the app's configuration and add `WEBHOP_AUTHTOKEN` as an application setting.
-
-Or run it in Docker on your host, from the clone's root (it serves http on port 8080; put a TLS-terminating proxy in front):
-
-```sh
-WEBHOP_AUTHTOKEN=<token> docker compose up --build -d
-```
-
-To embed the gateway in your own ASP.NET Core app instead, or for reverse proxy and hosting notes, see [WebHop.Gateway](WebHop.Gateway/README.md).
+For **Azure App Service**, follow the [step-by-step guide](WebHop.Gateway.Host/README.md#azure-app-service). To embed the gateway in your own ASP.NET Core app instead, or for reverse proxy and hosting notes, see [WebHop.Gateway](WebHop.Gateway/README.md).
 
 Below, `https://gateway.example.com/` stands for your gateway's URL.
 
@@ -65,6 +59,8 @@ Or download a standalone binary that runs without .NET:
 [![Linux x64](https://img.shields.io/badge/Linux-x64-FCC624)](https://github.com/elebree/WebHop/releases/latest/download/webhop-linux-x64.tar.gz)
 [![Linux arm64](https://img.shields.io/badge/Linux-arm64-FCC624)](https://github.com/elebree/WebHop/releases/latest/download/webhop-linux-arm64.tar.gz)
 [![macOS arm64](https://img.shields.io/badge/macOS-arm64-A2AAAD)](https://github.com/elebree/WebHop/releases/latest/download/webhop-osx-arm64.tar.gz)
+
+For tunnels that run unattended next to other containers, there's also a [Docker image](WebHop.CLI/README.md#docker).
 
 Point it at your gateway and forward a local port:
 
