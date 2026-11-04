@@ -10,7 +10,9 @@ services:
       - "8080:8080"
     environment:
       WEBHOP_AUTHTOKEN: ${WEBHOP_AUTHTOKEN:?Set WEBHOP_AUTHTOKEN}
-      # Behind a TLS-terminating reverse proxy (nginx, Traefik, Caddy), uncomment so the
-      # client's IP and scheme reach the servers instead of the proxy's
+      # A reverse proxy in front (nginx, Traefik, Caddy) on this host or a private network is
+      # believed about the client's IP and scheme (X-Forwarded-For/-Proto) without anything set
+      # here. Only a proxy that connects from a public address needs the line below, which
+      # believes every client, so then let nothing but the proxy reach the gateway:
       # ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
     restart: unless-stopped

@@ -54,13 +54,14 @@ The token is sent each time a tunnel opens, so serve the gateway over https outs
 | `/webhop/status` | Health check |
 | anything else | Forwarded to a connected app |
 
-Forwarded requests carry `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host`, plus `X-Webhop-Origin-Id` and `X-Webhop-Request-Id` on requests and responses. A request without a response within 120 s gets a 504.
+Forwarded requests carry `X-Forwarded-For` (the client's address and port, or the address alone when a proxy in front named the client), `X-Forwarded-Proto` and `X-Forwarded-Host`, plus `X-Webhop-Origin-Id` and `X-Webhop-Request-Id` on requests and responses. A request without a response within 120 s gets a 504.
 
 ## Hosting notes
 
 - Enable WebSockets on the host (on Azure App Service, in the app's configuration).
 - Run a single instance: tunnels live in memory, so behind a load balancer a request can land on an instance the app isn't connected to and get a 503.
-- Behind a TLS-terminating reverse proxy (nginx, Traefik, Caddy), set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` so apps see the client's real IP and scheme. The proxy must also pass WebSocket upgrades on `/webhop`; nginx needs `proxy_http_version 1.1` and the `Upgrade`/`Connection` headers for this.
+- Behind a TLS-terminating reverse proxy (nginx, Traefik, Caddy), have it send `X-Forwarded-For` and `X-Forwarded-Proto` (nginx: `proxy_set_header X-Forwarded-For $remote_addr;` and `proxy_set_header X-Forwarded-Proto $scheme;`), so apps see the client's real IP and scheme. The standalone gateway believes these from a proxy on loopback or a private network, such as one on the same host or the same Docker network, and never from a public address, so a visitor can't name another client. For a proxy that connects from a public address (a CDN), set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, which believes every client, and let nothing but the proxy reach the gateway. Embedded with `UseWebHopGateway`, your app's own forwarded headers setup applies instead.
+- The proxy must also pass WebSocket upgrades on `/webhop`; nginx needs `proxy_http_version 1.1` and the `Upgrade`/`Connection` headers for this.
 
 ## Azure App Service
 

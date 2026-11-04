@@ -11,7 +11,7 @@ The ready-to-deploy [WebHop](../README.md) gateway. It runs the standalone gatew
 |---|---|
 | `WEBHOP_AUTHTOKEN` or `WebHop:AuthToken` | The auth token servers must present to open tunnels. Without one the gateway starts but rejects every tunnel and logs an error. The setting wins when both are set |
 | `WebHop:MaxWebSockets` | The host's WebSocket limit, if Azure's plan detection doesn't fit; the gateway lets each server open 60% of it |
-| `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` | Behind a TLS-terminating reverse proxy, so servers see the client's real IP and scheme |
+| `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` | Only for a reverse proxy that connects from a public address (a CDN). It believes `X-Forwarded-For` and `X-Forwarded-Proto` from every client, so then nothing but the proxy may reach the gateway. A proxy on the same host or a private network is believed without it |
 
 Any ASP.NET Core configuration source works: environment variables (`WebHop__AuthToken`), `appsettings.json`, App Service application settings.
 

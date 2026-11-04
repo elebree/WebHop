@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.HttpOverrides;
+
 namespace WebHop.Gateway
 {
     /// <summary>
@@ -28,7 +30,16 @@ namespace WebHop.Gateway
 
             builder.Services.AddWebHopGateway();
 
+            // A proxy in front (nginx with TLS) on the same host or a private network is believed about the client
+            var trustEveryone = TrustedProxies.TrustEveryone(builder.Configuration);
+            if (!trustEveryone)
+                builder.Services.Configure<ForwardedHeadersOptions>(TrustedProxies.Configure);
+
             var app = builder.Build();
+
+            // First, so everything after sees the client the proxy named
+            if (!trustEveryone)
+                app.UseForwardedHeaders();
 
             configure?.Invoke(app);
 

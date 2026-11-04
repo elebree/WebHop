@@ -58,17 +58,33 @@ namespace WebHop.Tests.Integration
             await using var app = await TunnelApp.StartAsync(gateway.Url);
             await app.WaitForTunnelsAsync();
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, "/info");
-            // A visitor must not be able to fake these; the gateway overwrites them
-            request.Headers.Add(Headers.XForwardedProto, "https");
-            request.Headers.Add(Headers.XForwardedFor, "6.6.6.6");
-            using var response = await gateway.Client.SendAsync(request);
+            using var response = await gateway.Client.GetAsync("/info");
             var info = await response.Content.ReadFromJsonAsync<InfoResponse>();
 
             Assert.That(info!.Scheme, Is.EqualTo("http"));
             Assert.That(info.Host, Is.EqualTo(new Uri(gateway.Url).Authority));
             Assert.That(info.RemoteIp, Is.EqualTo("127.0.0.1"));
             Assert.That(info.TraceIdentifier, Is.EqualTo(response.Headers.GetValues(Headers.XWebhopRequestId).Single()));
+        }
+
+        [Test]
+        public async Task Behind_a_proxy_on_the_same_host_the_app_sees_the_client_it_names()
+        {
+            await using var gateway = await TestGateway.StartAsync();
+            await using var app = await TunnelApp.StartAsync(gateway.Url);
+            await app.WaitForTunnelsAsync();
+
+            // The test's requests come from loopback, as a proxy's on the same host would. A visitor from a public
+            // address can't do this (TrustedProxiesTests).
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/info");
+            request.Headers.Add(Headers.XForwardedProto, "https");
+            request.Headers.Add(Headers.XForwardedFor, "203.0.113.7");
+            using var response = await gateway.Client.SendAsync(request);
+            var info = await response.Content.ReadFromJsonAsync<InfoResponse>();
+
+            Assert.That(info!.Scheme, Is.EqualTo("https"));
+            Assert.That(info.RemoteIp, Is.EqualTo("203.0.113.7"));
+            Assert.That(info.ForwardedFor, Is.EqualTo("203.0.113.7"));
         }
 
         [Test]
@@ -315,6 +331,6 @@ namespace WebHop.Tests.Integration
         private static string Base64Url(string value) =>
             Convert.ToBase64String(Encoding.UTF8.GetBytes(value)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-        private sealed record InfoResponse(string Scheme, string Host, string? RemoteIp, string TraceIdentifier);
+        private sealed record InfoResponse(string Scheme, string Host, string? RemoteIp, string TraceIdentifier, string ForwardedFor);
     }
 }

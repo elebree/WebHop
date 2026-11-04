@@ -21,7 +21,10 @@ namespace WebHop.Gateway
             if (remoteIp is { IsIPv4MappedToIPv6: true })
                 remoteIp = remoteIp.MapToIPv4();
 
-            SetHeader(proxyRequest, Headers.XForwardedFor, remoteIp is null ? null : new IPEndPoint(remoteIp, context.Connection.RemotePort).ToString());
+            // The port is unknown (0) when a proxy in front named the client (TrustedProxies): the address alone then
+            var port = context.Connection.RemotePort;
+            SetHeader(proxyRequest, Headers.XForwardedFor,
+                remoteIp is null ? null : port == 0 ? remoteIp.ToString() : new IPEndPoint(remoteIp, port).ToString());
             SetHeader(proxyRequest, Headers.XForwardedProto, context.Request.Scheme);
             SetHeader(proxyRequest, Headers.XForwardedHost, context.Request.Host.Value);
             SetHeader(proxyRequest, Headers.XWebhopOriginId, originId);

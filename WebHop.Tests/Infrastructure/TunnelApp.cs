@@ -64,6 +64,7 @@ namespace WebHop.Tests.Infrastructure
                 host = c.Request.Host.Value,
                 remoteIp = c.Connection.RemoteIpAddress?.ToString(),
                 traceIdentifier = c.TraceIdentifier,
+                forwardedFor = c.Request.Headers["X-Forwarded-For"].ToString(),
             });
 
             app.MapGet("/cookies", (HttpContext c) =>
