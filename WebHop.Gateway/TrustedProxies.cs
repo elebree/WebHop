@@ -16,9 +16,16 @@ namespace WebHop.Gateway
         // IPv4-mapped IPv6: Kestrel listening on [::] (as in the Docker image) sees an IPv4 peer that way.
         private static readonly (string Prefix, int Length)[] Networks =
         [
-            ("127.0.0.0", 8), ("10.0.0.0", 8), ("172.16.0.0", 12), ("192.168.0.0", 16),
-            ("::ffff:127.0.0.0", 104), ("::ffff:10.0.0.0", 104), ("::ffff:172.16.0.0", 108), ("::ffff:192.168.0.0", 112),
-            ("::1", 128), ("fc00::", 7),
+            ("127.0.0.0", 8),
+            ("10.0.0.0", 8),
+            ("172.16.0.0", 12),
+            ("192.168.0.0", 16),
+            ("::ffff:127.0.0.0", 104),
+            ("::ffff:10.0.0.0", 104),
+            ("::ffff:172.16.0.0", 108),
+            ("::ffff:192.168.0.0", 112),
+            ("::1", 128),
+            ("fc00::", 7),
         ];
 
         /// <summary>Believes X-Forwarded-For and X-Forwarded-Proto from <see cref="Networks"/> only.</summary>

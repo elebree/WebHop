@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.HttpOverrides;
-
 namespace WebHop.Gateway
 {
     /// <summary>

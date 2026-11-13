@@ -172,12 +172,15 @@ namespace WebHop.Origin
             var reason = status != 0 ? $"HTTP {(int)status}" : ex.Message;
             // Refused only when the gateway's host answered (e.g. Azure's 503 beyond its WebSocket limit);
             // failing to connect at all is an outage, even while the last tunnels are still closing
-            var failure = status == HttpStatusCode.Unauthorized ? Failure.Unauthorized
+            // 429: the gateway holds off this address after too many wrong tokens, which is a token problem too
+            var failure = status is HttpStatusCode.Unauthorized or HttpStatusCode.TooManyRequests ? Failure.Unauthorized
                 : status != 0 && current > 0 ? Failure.Refused
                 : Failure.Unreachable;
 
             lastError = failure switch
             {
+                Failure.Unauthorized when status == HttpStatusCode.TooManyRequests =>
+                    "the gateway rejected the auth token too often from this address and holds off its tunnels for a minute",
                 Failure.Unauthorized => "the gateway rejected the auth token",
                 Failure.Refused => $"the gateway refused tunnel {current + 1}/{options.MaxConnections} ({reason}); the host probably limits concurrent WebSockets",
                 _ => reason,

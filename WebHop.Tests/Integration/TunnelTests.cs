@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Net.WebSockets;
 using System.Text;
 using WebHop.Core;
+using WebHop.Gateway;
 using WebHop.Origin;
 using WebHop.Tests.Infrastructure;
 
@@ -297,6 +298,27 @@ namespace WebHop.Tests.Integration
         }
 
         [Test]
+        public async Task Too_many_wrong_tokens_hold_off_the_address()
+        {
+            await using var gateway = await TestGateway.StartAsync();
+
+            for (var i = 0; i < HandshakeThrottle.Limit; i++)
+                Assert.That((await HandshakeAsync(gateway, "wrong-token")).Status, Is.EqualTo(HttpStatusCode.Unauthorized));
+
+            var held = await HandshakeAsync(gateway, "wrong-token");
+            Assert.That(held.Status, Is.EqualTo(HttpStatusCode.TooManyRequests));
+            Assert.That(int.Parse(held.RetryAfter!), Is.InRange(1, (int)HandshakeThrottle.Window.TotalSeconds));
+            // Its tokens aren't checked until the window is over, the right one included
+            Assert.That((await HandshakeAsync(gateway, TestGateway.AuthToken)).Status, Is.EqualTo(HttpStatusCode.TooManyRequests));
+            Assert.That(gateway.Registry.OriginCount, Is.EqualTo(0));
+
+            // An origin there says it's a token problem, not an outage
+            await using var app = await TunnelApp.StartAsync(gateway.Url);
+            await Eventually.TrueAsync(() => app.Server.Status.State == WebHopConnectionState.Unauthorized, "app reports unauthorized");
+            Assert.That(app.Server.Status.LastError, Does.Contain("holds off"));
+        }
+
+        [Test]
         public async Task The_gateway_advertises_the_per_origin_tunnel_limit()
         {
             await using var gateway = await TestGateway.StartAsync(maxWebSockets: 5); // 60% of 5 -> 3
@@ -326,6 +348,22 @@ namespace WebHop.Tests.Integration
             await Task.Delay(500);
             Assert.That(app.Server.Status.OpenTunnels, Is.EqualTo(3));
             Assert.That(await gateway.Client.GetStringAsync("/ping"), Is.EqualTo("pong"));
+        }
+
+        // A tunnel handshake with a bearer token: the status it got, and its Retry-After
+        private static async Task<(HttpStatusCode Status, string? RetryAfter)> HandshakeAsync(TestGateway gateway, string token)
+        {
+            using var ws = new ClientWebSocket();
+            ws.Options.CollectHttpResponseDetails = true;
+            ws.Options.SetRequestHeader("Authorization", "Bearer " + token);
+            try { await ws.ConnectAsync(new Uri(gateway.Url.Replace("http://", "ws://") + "/webhop?id=origin"), CancellationToken.None); }
+            catch (WebSocketException) { /* refused: the status says why */ }
+
+            var retryAfter = ws.HttpResponseHeaders?
+                .FirstOrDefault(h => string.Equals(h.Key, "Retry-After", StringComparison.OrdinalIgnoreCase)).Value?.FirstOrDefault();
+            if (ws.State == WebSocketState.Open)
+                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+            return (ws.HttpStatusCode, retryAfter);
         }
 
         private static string Base64Url(string value) =>

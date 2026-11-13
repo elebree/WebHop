@@ -19,6 +19,7 @@ namespace Microsoft.AspNetCore.Builder
             var services = app.ApplicationServices;
             var registry = services.GetRequiredService<TunnelRegistry>();
             var authorization = services.GetRequiredService<TunnelAuthorization>();
+            var throttle = services.GetRequiredService<HandshakeThrottle>();
             var forwarder = services.GetRequiredService<IHttpForwarder>();
             var tunnelClient = services.GetRequiredService<GatewayTunnelClient>();
             var lifetime = services.GetRequiredService<IHostApplicationLifetime>();
@@ -45,7 +46,7 @@ namespace Microsoft.AspNetCore.Builder
                 // Origins open tunnel streams here: one WebSocket per HTTP connection
                 if (path.Equals(Constants.DefaultWebHopEndpoint, StringComparison.OrdinalIgnoreCase))
                 {
-                    await AcceptTunnelAsync(context, registry, authorization, lifetime, logger, maxConnectionsPerOrigin);
+                    await AcceptTunnelAsync(context, registry, authorization, throttle, lifetime, logger, maxConnectionsPerOrigin);
                     return;
                 }
 
@@ -70,7 +71,7 @@ namespace Microsoft.AspNetCore.Builder
             });
         }
 
-        private static async Task AcceptTunnelAsync(HttpContext context, TunnelRegistry registry, TunnelAuthorization authorization, IHostApplicationLifetime lifetime, ILogger logger, int maxConnectionsPerOrigin)
+        private static async Task AcceptTunnelAsync(HttpContext context, TunnelRegistry registry, TunnelAuthorization authorization, HandshakeThrottle throttle, IHostApplicationLifetime lifetime, ILogger logger, int maxConnectionsPerOrigin)
         {
             string? originId = context.Request.Query[Constants.OriginIdParameter];
             if (!context.WebSockets.IsWebSocketRequest || !TunnelRegistry.IsValidOriginId(originId))
@@ -79,12 +80,30 @@ namespace Microsoft.AspNetCore.Builder
                 return;
             }
 
+            // An address that presented too many wrong tokens isn't checked again until its window is over
+            var remoteIp = context.Connection.RemoteIpAddress;
+            if (throttle.HeldOff(remoteIp) is { } wait)
+            {
+                logger.LogDebug("Held off a tunnel from {RemoteIp} for another {Seconds} s", remoteIp, Math.Ceiling(wait.TotalSeconds));
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                context.Response.Headers["Retry-After"] = ((int)Math.Ceiling(wait.TotalSeconds)).ToString();
+                return;
+            }
+
             if (!authorization.IsAuthorized(context))
             {
                 if (authorization.IsConfigured)
-                    logger.LogWarning("Rejected tunnel from {RemoteIp}: invalid auth token", context.Connection.RemoteIpAddress);
+                {
+                    logger.LogWarning("Rejected tunnel from {RemoteIp}: invalid auth token", remoteIp);
+                    if (throttle.Reject(remoteIp))
+                        logger.LogWarning("Holding off tunnels from {RemoteIp}: {Limit} invalid auth tokens within {Seconds} s",
+                            remoteIp, HandshakeThrottle.Limit, HandshakeThrottle.Window.TotalSeconds);
+                }
                 else
-                    logger.LogWarning("Rejected tunnel from {RemoteIp}: the gateway has no auth token configured", context.Connection.RemoteIpAddress);
+                {
+                    // Nothing to guess without a token: every tunnel is turned away, and that's logged at startup
+                    logger.LogWarning("Rejected tunnel from {RemoteIp}: the gateway has no auth token configured", remoteIp);
+                }
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 return;
             }
