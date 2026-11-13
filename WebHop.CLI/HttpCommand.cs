@@ -60,19 +60,7 @@ namespace WebHop.CLI
                 string? failure = null;
                 try
                 {
-                    var error = await forwarder.SendAsync(context, target, client, requestConfig, transformer);
-                    if (error != ForwarderError.None)
-                    {
-                        var exception = context.Features.Get<IForwarderErrorFeature>()?.Exception;
-                        failure = exception?.GetBaseException().Message ?? error.ToString();
-                        if (error is ForwarderError.Request && !context.Response.HasStarted)
-                        {
-                            // Like ngrok: say plainly that the local server is the problem
-                            context.Response.StatusCode = StatusCodes.Status502BadGateway;
-                            context.Response.ContentType = "text/plain; charset=utf-8";
-                            await context.Response.WriteAsync($"WebHop could not reach {target}\n\n{failure}\n");
-                        }
-                    }
+                    failure = await ForwardAsync(context, forwarder, target, client, requestConfig, transformer);
                 }
                 finally
                 {
@@ -113,6 +101,30 @@ namespace WebHop.CLI
 
             return 0;
         }
+
+        /// <summary>Forwards one request to the local server. Returns why that failed, or null.</summary>
+        internal static async Task<string?> ForwardAsync(HttpContext context, IHttpForwarder forwarder, string target,
+            HttpMessageInvoker client, ForwarderRequestConfig requestConfig, HttpTransformer transformer)
+        {
+            var error = await forwarder.SendAsync(context, target, client, requestConfig, transformer);
+            if (error == ForwarderError.None)
+                return null;
+
+            var exception = context.Features.Get<IForwarderErrorFeature>()?.Exception;
+            var failure = exception?.GetBaseException().Message ?? error.ToString();
+            if (error is ForwarderError.Request && !context.Response.HasStarted)
+            {
+                // Like ngrok, say plainly that the local server is the problem. The target and the
+                // error stay in the request log: visitors shouldn't learn what runs behind the tunnel.
+                context.Response.StatusCode = StatusCodes.Status502BadGateway;
+                context.Response.ContentType = "text/plain; charset=utf-8";
+                await context.Response.WriteAsync(UnreachableMessage);
+            }
+
+            return failure;
+        }
+
+        internal const string UnreachableMessage = "WebHop could not reach the server behind this tunnel.\n";
 
         private static void ConfigureLogging(ILoggingBuilder logging, HttpOptions options, LogTarget target, Session session)
         {

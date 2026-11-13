@@ -1,6 +1,9 @@
+using System.Net;
+using System.Net.Sockets;
 using Microsoft.Extensions.Logging.Abstractions;
 using WebHop.CLI;
 using WebHop.Origin;
+using Yarp.ReverseProxy.Forwarder;
 
 namespace WebHop.Tests.Cli
 {
@@ -47,6 +50,34 @@ namespace WebHop.Tests.Cli
         }
 
         [Test]
+        public async Task An_unreachable_local_server_is_not_revealed_to_visitors()
+        {
+            var port = ClosedLoopbackPort();
+            var target = $"http://127.0.0.1:{port}/";
+            await using var services = new ServiceCollection().AddLogging().AddHttpForwarder().BuildServiceProvider();
+            using var client = new HttpMessageInvoker(new SocketsHttpHandler { UseProxy = false });
+            var context = new DefaultHttpContext { RequestServices = services };
+            context.Request.Method = "GET";
+            context.Request.Host = new HostString("public.example.com");
+            context.Request.Path = "/";
+            context.Response.Body = new MemoryStream();
+
+            var failure = await HttpCommand.ForwardAsync(context, services.GetRequiredService<IHttpForwarder>(), target,
+                client, ForwarderRequestConfig.Empty, new LocalTransformer(new Uri(target), null));
+
+            context.Response.Body.Position = 0;
+            var body = await new StreamReader(context.Response.Body).ReadToEndAsync();
+            Assert.Multiple(() =>
+            {
+                Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status502BadGateway));
+                Assert.That(body, Is.EqualTo(HttpCommand.UnreachableMessage));
+                Assert.That(body, Does.Not.Contain("127.0.0.1").And.Not.Contain(port.ToString()));
+                // The operator still sees why
+                Assert.That(failure, Is.Not.Null.And.Not.Empty);
+            });
+        }
+
+        [Test]
         public void Host_errors_are_reported_to_the_session()
         {
             var session = new Session();
@@ -78,6 +109,15 @@ namespace WebHop.Tests.Cli
             provider.CreateLogger(typeof(WebHopServer).FullName!).LogError("gateway unreachable");
 
             Assert.That(session.LastError, Is.Null);
+        }
+
+        private static int ClosedLoopbackPort()
+        {
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            listener.Stop();
+            return port;
         }
     }
 }
