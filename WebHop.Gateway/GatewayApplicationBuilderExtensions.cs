@@ -9,9 +9,10 @@ namespace Microsoft.AspNetCore.Builder
     {
         /// <summary>
         /// Routes traffic through the WebHop gateway. Origins open tunnels at
-        /// <see cref="Constants.DefaultWebHopEndpoint"/>; every other request is forwarded to a
-        /// connected origin round-robin. When no origin is connected the request falls through to
-        /// the next middleware, so a host can serve its own content (or end the pipeline with a 503).
+        /// <see cref="Constants.DefaultWebHopEndpoint"/> and serve the host name they opened them on;
+        /// every other request is forwarded round-robin to an origin connected on the request's host.
+        /// When none is, the request falls through to the next middleware, so a host can serve its own
+        /// content (or end the pipeline with a 503).
         /// Call <c>AddWebHopGateway()</c> first and <c>UseWebSockets()</c> before this.
         /// </summary>
         public static IApplicationBuilder UseWebHopGateway(this IApplicationBuilder app)
@@ -50,8 +51,8 @@ namespace Microsoft.AspNetCore.Builder
                     return;
                 }
 
-                // Public traffic: forward to a connected origin, or fall through when none is connected
-                var originId = registry.PickOrigin();
+                // Public traffic: forward to an origin connected on this host, or fall through when none is
+                var originId = registry.PickOrigin(TunnelRegistry.HostKey(context.Request.Host));
                 if (originId is null)
                 {
                     await next(context);
@@ -108,6 +109,15 @@ namespace Microsoft.AspNetCore.Builder
                 return;
             }
 
+            // The origin serves the host it reached the gateway on; one id can't serve two hosts at once
+            var host = TunnelRegistry.HostKey(context.Request.Host);
+            if (registry.ServesOtherHost(originId!, host))
+            {
+                logger.LogWarning("Rejected tunnel of {OriginId} on {Host}: it is connected on another host", originId, host);
+                context.Response.StatusCode = StatusCodes.Status409Conflict;
+                return;
+            }
+
             // Tell the origin how many tunnels it may keep open, so it won't exhaust the host's WebSocket budget
             if (maxConnectionsPerOrigin > 0)
                 context.Response.Headers[Headers.XWebhopMaxConnections] = maxConnectionsPerOrigin.ToString();
@@ -120,7 +130,7 @@ namespace Microsoft.AspNetCore.Builder
             // Close tunnels as soon as the gateway stops; otherwise shutdown waits for each tunnel
             // request until the host's 30 s timeout, and origins reconnect that much later
             using var closing = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, lifetime.ApplicationStopping);
-            await registry.RunTunnelAsync(originId!, new TunnelStream(webSocket), closing.Token);
+            await registry.RunTunnelAsync(host, originId!, new TunnelStream(webSocket), closing.Token);
         }
     }
 }

@@ -21,9 +21,13 @@ namespace WebHop.Tests.Infrastructure
 
         /// <param name="port">0 picks a free port; pass a previous gateway's port to restart "the same" gateway.</param>
         /// <param name="maxWebSockets">Sets WebHop:MaxWebSockets, so the gateway advertises a per-origin tunnel cap.</param>
-        public static async Task<TestGateway> StartAsync(string? authToken = AuthToken, int port = 0, int? maxWebSockets = null)
+        /// <param name="listenHost">
+        /// "localhost" listens on both loopback addresses, so the gateway is reachable under two names
+        /// (127.0.0.1 and localhost); it needs a fixed port.
+        /// </param>
+        public static async Task<TestGateway> StartAsync(string? authToken = AuthToken, int port = 0, int? maxWebSockets = null, string listenHost = "127.0.0.1")
         {
-            List<string> args = ["--urls", $"http://127.0.0.1:{port}", "--Logging:LogLevel:Default=Warning"];
+            List<string> args = ["--urls", $"http://{listenHost}:{port}", "--Logging:LogLevel:Default=Warning"];
             if (authToken is not null)
                 args.Add($"--WebHop:AuthToken={authToken}");
             if (maxWebSockets is { } max)

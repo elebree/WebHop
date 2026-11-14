@@ -350,13 +350,76 @@ namespace WebHop.Tests.Integration
             Assert.That(await gateway.Client.GetStringAsync("/ping"), Is.EqualTo("pong"));
         }
 
+        [Test]
+        public async Task Apps_connected_on_different_host_names_each_get_their_own_requests()
+        {
+            var port = await ReservePortAsync();
+            await using var gateway = await TestGateway.StartAsync(port: port, listenHost: "localhost");
+            await using var first = await TunnelApp.StartAsync($"http://127.0.0.1:{port}/");
+            await using var second = await TunnelApp.StartAsync($"http://localhost:{port}/");
+            await first.WaitForTunnelsAsync();
+            await second.WaitForTunnelsAsync();
+            using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+
+            for (var i = 0; i < 4; i++)
+            {
+                Assert.That(await OriginOfAsync(client, $"127.0.0.1:{port}"), Is.EqualTo(first.Server.OriginId));
+                Assert.That(await OriginOfAsync(client, $"LOCALHOST:{port}"), Is.EqualTo(second.Server.OriginId));
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/ping");
+            request.Headers.Host = "unknown.example.test";
+            using var response = await client.SendAsync(request);
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.ServiceUnavailable));
+        }
+
+        [Test]
+        public async Task An_origin_id_connected_on_one_host_name_is_refused_on_another()
+        {
+            var port = await ReservePortAsync();
+            await using var gateway = await TestGateway.StartAsync(port: port, listenHost: "localhost");
+            await using var app = await TunnelApp.StartAsync($"http://127.0.0.1:{port}/", o =>
+            {
+                o.AuthToken = TestGateway.AuthToken;
+                o.OriginId = "fixedid";
+            });
+            await app.WaitForTunnelsAsync();
+
+            var (status, _) = await HandshakeAsync($"http://localhost:{port}", TestGateway.AuthToken, "fixedid");
+
+            Assert.That(status, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(gateway.Registry.OriginCount, Is.EqualTo(1));
+            using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            Assert.That(await OriginOfAsync(client, $"127.0.0.1:{port}"), Is.EqualTo("fixedid"));
+        }
+
+        // A free port, by starting and stopping a gateway on it
+        private static async Task<int> ReservePortAsync()
+        {
+            await using var probe = await TestGateway.StartAsync();
+            return probe.Port;
+        }
+
+        // The origin that answered a request for the host
+        private static async Task<string> OriginOfAsync(HttpClient client, string host)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/ping");
+            request.Headers.Host = host;
+            using var response = await client.SendAsync(request);
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), host);
+            return response.Headers.GetValues(Headers.XWebhopOriginId).Single();
+        }
+
+        private static Task<(HttpStatusCode Status, string? RetryAfter)> HandshakeAsync(TestGateway gateway, string token) =>
+            HandshakeAsync(gateway.Url, token, "origin");
+
         // A tunnel handshake with a bearer token: the status it got, and its Retry-After
-        private static async Task<(HttpStatusCode Status, string? RetryAfter)> HandshakeAsync(TestGateway gateway, string token)
+        private static async Task<(HttpStatusCode Status, string? RetryAfter)> HandshakeAsync(string gatewayUrl, string token, string originId)
         {
             using var ws = new ClientWebSocket();
             ws.Options.CollectHttpResponseDetails = true;
             ws.Options.SetRequestHeader("Authorization", "Bearer " + token);
-            try { await ws.ConnectAsync(new Uri(gateway.Url.Replace("http://", "ws://") + "/webhop?id=origin"), CancellationToken.None); }
+            try { await ws.ConnectAsync(new Uri(gatewayUrl.Replace("http://", "ws://") + $"/webhop?{Constants.OriginIdParameter}={originId}"), CancellationToken.None); }
             catch (WebSocketException) { /* refused: the status says why */ }
 
             var retryAfter = ws.HttpResponseHeaders?

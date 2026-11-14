@@ -38,7 +38,18 @@ app.UseWebHopGateway();
 app.MapGet("/", () => "No app connected");   // your own content
 ```
 
-Every request is forwarded to a connected app; with several connected, they take turns. While none is connected, requests fall through to the rest of your pipeline.
+Every request is forwarded to an app connected on the request's host name; with several connected there, they take turns. While none is connected, requests fall through to the rest of your pipeline.
+
+## Several sites on one gateway
+
+An app serves the host name it reached the gateway on. Point several names at one gateway (a wildcard DNS record such as `*.gateway.example.com` and a matching certificate) and give each app its own:
+
+```text
+webhop http 5000 --url https://app1.gateway.example.com/
+webhop http 5001 --url https://app2.gateway.example.com/
+```
+
+Requests for `app1.gateway.example.com` reach only the first app, and requests for a name no app is connected on get a 503. Names are matched without the port and regardless of case. Every app presents the same auth token, so any of them may connect on any name: share the token only with apps you trust.
 
 ## Auth token
 
@@ -61,6 +72,7 @@ Forwarded requests carry `X-Forwarded-For` (the client's address and port, or th
 - Enable WebSockets on the host (on Azure App Service, in the app's configuration).
 - Run a single instance: tunnels live in memory, so behind a load balancer a request can land on an instance the app isn't connected to and get a 503.
 - Behind a TLS-terminating reverse proxy (nginx, Traefik, Caddy), have it send `X-Forwarded-For` and `X-Forwarded-Proto` (nginx: `proxy_set_header X-Forwarded-For $remote_addr;` and `proxy_set_header X-Forwarded-Proto $scheme;`), so apps see the client's real IP and scheme. The standalone gateway believes these from a proxy on loopback or a private network, such as one on the same host or the same Docker network, and never from a public address, so a visitor can't name another client. For a proxy that connects from a public address (a CDN), set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, which believes every client, and let nothing but the proxy reach the gateway. Embedded with `UseWebHopGateway`, your app's own forwarded headers setup applies instead.
+- The proxy must keep the request's `Host` (nginx: `proxy_set_header Host $host;`), since apps are picked by it.
 - The proxy must also pass WebSocket upgrades on `/webhop`; nginx needs `proxy_http_version 1.1` and the `Upgrade`/`Connection` headers for this.
 
 ## Azure App Service
