@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Globalization;
+using WebHop.Core;
 
 namespace WebHop.CLI
 {
@@ -17,8 +19,15 @@ namespace WebHop.CLI
 
             switch (parsed.Positional)
             {
-                case ["add-authtoken", var token]:
-                    return Update(path, c => c.AuthToken = token, "Auth token");
+                case ["add-authtoken", var value]:
+                {
+                    var token = OriginToken.TryParse(value, out var parsedToken, out var problem)
+                        ? parsedToken
+                        : throw new CliException($"That is not a WebHop token: {problem}. The gateway's issuer makes one with `webhop-gen token issue`.");
+                    var exitCode = Update(path, c => c.AuthToken = token.Value, "Auth token");
+                    Describe(token);
+                    return exitCode;
+                }
                 case ["add-gateway-url", var url]:
                     return Update(path, c => c.GatewayUrl = HttpOptions.ParseGateway(url).ToString(), "Gateway URL");
                 case ["check"]:
@@ -52,11 +61,24 @@ namespace WebHop.CLI
             var config = CliConfig.Load(path);
             if (config.GatewayUrl is { } gatewayUrl)
                 HttpOptions.ParseGateway(gatewayUrl);
+            OriginToken? token = null;
+            if (config.AuthToken is { Length: > 0 } authToken && !OriginToken.TryParse(authToken, out token, out var problem))
+                throw new CliException($"The authtoken in {path} is not a WebHop token: {problem}.");
 
             Console.WriteLine($"Valid configuration file at {path}");
             Console.WriteLine($"  gateway_url  {config.GatewayUrl ?? "(not set)"}");
             Console.WriteLine($"  authtoken    {Mask(config.AuthToken)}");
+            if (token is not null)
+                Describe(token);
             return 0;
+        }
+
+        /// <summary>What a token says, read without checking its signature: the gateway does that.</summary>
+        private static void Describe(OriginToken token)
+        {
+            Console.WriteLine($"  origin       {token.Subject}");
+            Console.WriteLine($"  serves       {string.Join(", ", token.Audience)}");
+            Console.WriteLine($"  expires      {token.Expires.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture)}{(token.Expires < DateTimeOffset.UtcNow ? " (expired)" : "")}");
         }
 
         private static int Edit(string path)

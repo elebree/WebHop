@@ -19,12 +19,17 @@ namespace WebHop.CLI
         public static async Task<int> RunAsync(HttpOptions options)
         {
             var config = CliConfig.Load(options.ConfigPath);
-            var gatewayValue = options.Url ?? Environment.GetEnvironmentVariable("WEBHOP_URL") ?? config.GatewayUrl
-                ?? throw new CliException("No gateway. Pass --url=https://<your-gateway>/ or run `webhop config add-gateway-url https://<your-gateway>/`.");
-            var gateway = HttpOptions.ParseGateway(gatewayValue);
             var authToken = options.AuthToken ?? Environment.GetEnvironmentVariable(Constants.AuthTokenEnvironmentVariable) ?? config.AuthToken;
             if (string.IsNullOrWhiteSpace(authToken))
-                throw new CliException("No auth token. Run `webhop config add-authtoken <token>`, pass --authtoken or set WEBHOP_AUTHTOKEN.");
+                throw new CliException("No auth token. Run `webhop config add-authtoken <token>`, pass --token or set WEBHOP_AUTHTOKEN. The gateway's issuer makes one with `webhop-gen token issue`.");
+            if (!OriginToken.TryParse(authToken, out var token, out var problem))
+                throw new CliException($"The auth token can't be used: {problem}.");
+
+            // The token names the gateway, unless it serves only paths; these override its scheme, host and port
+            var gatewayValue = options.Url ?? Environment.GetEnvironmentVariable("WEBHOP_URL") ?? config.GatewayUrl;
+            var gateway = gatewayValue is null ? null : HttpOptions.ParseGateway(gatewayValue);
+            if (gateway is null && token.Audience.All(e => e.IsPath))
+                throw new CliException($"No gateway: the token serves only paths ({string.Join(", ", token.Audience)}). Pass --url=https://<your-gateway>/ or run `webhop config add-gateway-url https://<your-gateway>/`.");
 
             // Like ngrok: the live screen unless logs go to stdout/stderr or output is redirected
             var logTarget = options.Log is LogTarget.None && Console.IsOutputRedirected ? LogTarget.Stdout : options.Log;
@@ -33,15 +38,27 @@ namespace WebHop.CLI
 
             // No args and a content root outside the current directory: an appsettings.json or
             // ASPNETCORE_* settings meant for the app being exposed must not configure the tunnel
-            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [], ContentRootPath = AppContext.BaseDirectory });
+            var builderOptions = new WebApplicationOptions { Args = [], ContentRootPath = AppContext.BaseDirectory };
+#if NET8_0_OR_GREATER
+            // Slim: without Kestrel's HTTPS and HTTP/3, IIS and the extra log providers; WebHopServer replaces
+            // the server and the logging below replaces the providers anyway. Keeps the AOT binary smaller.
+            var builder = WebApplication.CreateSlimBuilder(builderOptions);
+#else
+            var builder = WebApplication.CreateBuilder(builderOptions);
+#endif
             ConfigureLogging(builder.Logging, options, logTarget, session);
 
-            builder.WebHost.UseWebHop(gateway.ToString(), o =>
+            builder.WebHost.UseWebHop(o =>
             {
                 o.AuthToken = authToken;
                 if (options.Connections is { } connections)
                     o.MaxConnections = connections;
             });
+            // Only the flags above name the gateway: ASPNETCORE_URLS or ASPNETCORE_HTTP_PORTS meant for the app
+            // being exposed must not
+            builder.WebHost.UseSetting(WebHostDefaults.ServerUrlsKey, gateway?.ToString() ?? "");
+            builder.WebHost.UseSetting("http_ports", "");
+            builder.WebHost.UseSetting("https_ports", "");
             builder.Services.AddHttpForwarder();
 
             var app = builder.Build();
@@ -84,7 +101,7 @@ namespace WebHop.CLI
             }
 
             var server = (WebHopServer)app.Services.GetRequiredService<IServer>();
-            var info = new SessionInfo(gateway, options.Target, server);
+            var info = new SessionInfo(server, options.Target);
             logger.LogInformation("Forwarding {PublicUrl} -> {Target}", info.PublicUrl, info.Target);
 
             if (interactive)
@@ -195,10 +212,13 @@ namespace WebHop.CLI
         }
     }
 
-    internal sealed record SessionInfo(Uri Gateway, Uri Target, WebHopServer Server)
+    /// <summary>The started server and what it forwards to.</summary>
+    internal sealed record SessionInfo(WebHopServer Server, Uri Target)
     {
-        public string PublicUrl { get; } = Gateway.GetLeftPart(UriPartial.Authority)
-            .Replace("wss://", "https://").Replace("ws://", "http://");
+        public OriginToken Token => Server.Token!;
+
+        /// <summary>Where visitors reach the target: the host tunnels connect to, with the path the token serves there.</summary>
+        public string PublicUrl => Server.PublicUrl is { AbsolutePath: "/" } root ? root.GetLeftPart(UriPartial.Authority) : Server.PublicUrl!.ToString();
     }
 
     /// <summary>Sets the Host header the local server sees; forwarded headers pass through unchanged.</summary>

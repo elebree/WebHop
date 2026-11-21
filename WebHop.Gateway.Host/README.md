@@ -9,11 +9,13 @@ The ready-to-deploy [WebHop](../README.md) gateway. It runs the standalone gatew
 
 | Setting | Meaning |
 |---|---|
-| `WEBHOP_AUTHTOKEN` or `WebHop:AuthToken` | The auth token servers must present to open tunnels. Without one the gateway starts but rejects every tunnel and logs an error. The setting wins when both are set |
+| `WEBHOP_KEYSET` or `WebHop:KeySet` | The public key set, `whk_…`, that `webhop-gen issuer init` prints. Servers open tunnels with tokens signed by its keys. Without it the gateway starts but rejects every tunnel and logs an error. The setting wins when both are set; in `appsettings.json` it can also be the set's JSON |
 | `WebHop:MaxWebSockets` | The host's WebSocket limit, if Azure's plan detection doesn't fit; the gateway lets each server open 60% of it |
 | `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` | Only for a reverse proxy that connects from a public address (a CDN). It believes `X-Forwarded-For` and `X-Forwarded-Proto` from every client, so then nothing but the proxy may reach the gateway. A proxy on the same host or a private network is believed without it |
 
-Any ASP.NET Core configuration source works: environment variables (`WebHop__AuthToken`), `appsettings.json`, App Service application settings.
+Any ASP.NET Core configuration source works: environment variables (`WebHop__KeySet`), `appsettings.json`, App Service application settings.
+
+The gateway logs the issuer, key ids, tunnel endpoint and `allow` of the set it loaded at startup. See [Keys and tokens](../WebHop.Gateway/README.md#keys-and-tokens) for issuing and revoking tokens.
 
 ## Azure App Service
 
@@ -26,7 +28,7 @@ dotnet publish WebHop.Gateway.Host -c Release -o gateway
 Deploy the `gateway` folder to a web app on .NET 9, with Visual Studio's Publish, `az webapp deploy` or any other way. In the web app's configuration:
 
 - enable **WebSockets**;
-- add `WEBHOP_AUTHTOKEN` as an application setting;
+- add `WEBHOP_KEYSET` as an application setting, with the public set from `webhop-gen issuer init <your-app>.azurewebsites.net`;
 - on Basic and higher plans, turn on **Always on**, so the app isn't unloaded while idle.
 
 ### With the Azure CLI
@@ -41,12 +43,12 @@ From the repository root, after `az login`. Pick your own names for the resource
    az webapp create --name <your-app> --resource-group webhop-rg --plan webhop-plan --runtime "dotnet:9"
    ```
 
-2. Enable WebSockets and Always on, require HTTPS, and set the auth token:
+2. Enable WebSockets and Always on, require HTTPS, and set the public key set:
 
    ```sh
    az webapp config set --name <your-app> --resource-group webhop-rg --web-sockets-enabled true --always-on true
    az webapp update --name <your-app> --resource-group webhop-rg --https-only true
-   az webapp config appsettings set --name <your-app> --resource-group webhop-rg --settings WEBHOP_AUTHTOKEN=<token>
+   az webapp config appsettings set --name <your-app> --resource-group webhop-rg --settings WEBHOP_KEYSET=<whk_…>
    ```
 
    On the Free (`F1`) and Shared (`D1`) plans, leave out `--always-on true`; those plans don't support it.
@@ -65,29 +67,31 @@ To update the gateway later, repeat step 3. If the gateway doesn't pick up a cha
 
 ### With Visual Studio
 
-Right-click **WebHop.Gateway.Host** > **Publish** > **Azure** > **Azure App Service (Windows)**, and pick or create the web app. Visual Studio builds and deploys the app; enable WebSockets and set `WEBHOP_AUTHTOKEN` in the web app's configuration in the Azure portal as above.
+Right-click **WebHop.Gateway.Host** > **Publish** > **Azure** > **Azure App Service (Windows)**, and pick or create the web app. Visual Studio builds and deploys the app; enable WebSockets and set `WEBHOP_KEYSET` in the web app's configuration in the Azure portal as above.
 
 ### After deploying
 
-Servers then connect to `https://<your-app>.azurewebsites.net/`. Every tunnel is one WebSocket, and the Free and Shared plans cap WebSockets; see [Azure App Service](../WebHop.Gateway/README.md#azure-app-service) for how the gateway handles that.
+Issue a token for each server with `webhop-gen token issue <your-app>.azurewebsites.net`; servers connect where their token says. Every tunnel is one WebSocket, and the Free and Shared plans cap WebSockets; see [Azure App Service](../WebHop.Gateway/README.md#azure-app-service) for how the gateway handles that.
 
 ## Docker
 
 Prebuilt images for linux/amd64 and linux/arm64 are published as `elebree/webhop` on Docker Hub and `ghcr.io/elebree/webhop` on GitHub. Each release is tagged with its version (`2.1.0`), its minor version (`2.1`) and `latest`; `edge` is the newest build of `main`. To run the gateway on http://localhost:8080:
 
 ```sh
-docker run -d -p 8080:8080 -e WEBHOP_AUTHTOKEN=<token> --restart unless-stopped elebree/webhop
+docker run -d -p 8080:8080 -e WEBHOP_KEYSET=<whk_…> --restart unless-stopped elebree/webhop
 ```
 
-The container serves plain http, so on a public host put a TLS-terminating proxy in front of it; the proxy must pass WebSocket upgrades on `/webhop`.
+The container serves plain http, so on a public host put a TLS-terminating proxy in front of it; the proxy must pass WebSocket upgrades on the tunnel endpoint (`/webhop`, unless the key set names another).
 
 From a clone, the compose file in the repository root builds the image and runs it the same way:
 
 ```sh
-WEBHOP_AUTHTOKEN=<token> docker compose up --build -d
+WEBHOP_KEYSET=<whk_…> docker compose up --build -d
 ```
 
-`WEBHOP_AUTHTOKEN` can also go in a `.env` file next to `docker-compose.yml`.
+`WEBHOP_KEYSET` can also go in a `.env` file next to `docker-compose.yml`.
+
+For a public host with https on one host name or on every subdomain of a domain, [deploy/traefik](../deploy/traefik/README.md) runs the gateway behind Traefik with Docker Compose and a Let's Encrypt certificate, issued through your DNS host's API.
 
 To build the image on its own, build from the repository root, since the Dockerfile needs the sibling projects:
 
@@ -97,13 +101,14 @@ docker build -f WebHop.Gateway.Host/Dockerfile -t webhop .
 
 ## Running locally
 
-For experiments and development:
+For experiments and development, with a key set for localhost:
 
 ```sh
+export WEBHOP_KEYSET=$(webhop-gen issuer init localhost)
 dotnet run --project WebHop.Gateway.Host --launch-profile https
 ```
 
-The gateway listens on https://localhost:7188 and http://localhost:5075.
+The gateway listens on https://localhost:7188 and http://localhost:5075. A token for it: `webhop-gen token issue localhost:7188`.
 
 ## Customizing
 

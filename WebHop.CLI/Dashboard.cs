@@ -1,4 +1,6 @@
+using System.Globalization;
 using Microsoft.AspNetCore.WebUtilities;
+using WebHop.Core;
 using WebHop.Origin;
 
 namespace WebHop.CLI
@@ -11,12 +13,13 @@ namespace WebHop.CLI
     {
         private const int LabelWidth = 30;
 
-        private readonly record struct Segment(string Text, ConsoleColor? Color = null);
+        internal readonly record struct Segment(string Text, ConsoleColor? Color = null);
 
         public async Task RunAsync(CancellationToken ct)
         {
             var lastVersion = -1;
             WebHopOriginStatus? lastStatus = null;
+            Segment? lastExpiry = null;
             var lastSize = (Width: 0, Height: 0);
 
             TrySetCursorVisible(false);
@@ -34,11 +37,13 @@ namespace WebHop.CLI
                         lastSize = size;
                     }
 
-                    if (session.Version != lastVersion || status != lastStatus)
+                    var expiry = Expiry(info.Token, DateTimeOffset.UtcNow);
+                    if (session.Version != lastVersion || status != lastStatus || expiry != lastExpiry)
                     {
                         lastVersion = session.Version;
                         lastStatus = status;
-                        Render(Build(status, size.Height), size.Width, size.Height);
+                        lastExpiry = expiry;
+                        Render(Build(status, expiry, size.Height), size.Width, size.Height);
                     }
                 }
                 while (await WaitAsync(timer, ct));
@@ -52,7 +57,7 @@ namespace WebHop.CLI
             }
         }
 
-        private List<Segment[]> Build(WebHopOriginStatus status, int height)
+        private List<Segment[]> Build(WebHopOriginStatus status, Segment expiry, int height)
         {
             List<Segment[]> lines =
             [
@@ -60,15 +65,16 @@ namespace WebHop.CLI
                 [],
                 Row("Session Status", StatusText(status)),
                 Row("Version", new Segment(AppVersion.Current)),
-                Row("Origin Id", new Segment(info.Server.OriginId)),
+                Row("Origin Id", new Segment(info.Token.Subject)),
                 Row("Tunnels", new Segment($"{status.OpenTunnels}/{status.MaxTunnels} open")),
                 Row("Forwarding", new Segment($"{info.PublicUrl} -> {info.Target.ToString().TrimEnd('/')}")),
+                Row("Token Expires", expiry),
             ];
 
             if (status.LastError is { } error)
                 lines.Add(Row(status.State == WebHopConnectionState.Online ? "Warning" : "Error",
                     new Segment(error, status.State == WebHopConnectionState.Online ? ConsoleColor.Yellow : ConsoleColor.Red)));
-            if (info.Gateway.Scheme is "http" or "ws" && !info.Gateway.IsLoopback)
+            if (info.Server.TunnelUri is { Scheme: "ws", IsLoopback: false })
                 lines.Add(Row("Warning", new Segment("the auth token is sent unencrypted; use an https:// gateway", ConsoleColor.Yellow)));
             if (session.LastError is { } hostError)
                 lines.Add(Row("Last Error", new Segment(hostError, ConsoleColor.Red)));
@@ -131,8 +137,30 @@ namespace WebHop.CLI
             WebHopConnectionState.Connecting => new("connecting", ConsoleColor.Yellow),
             WebHopConnectionState.Offline => new("reconnecting", ConsoleColor.Red),
             WebHopConnectionState.Unauthorized => new("unauthorized - check the auth token", ConsoleColor.Red),
+            WebHopConnectionState.Forbidden => new("forbidden - the token doesn't serve this host", ConsoleColor.Red),
+            WebHopConnectionState.Conflict => new("conflict - the origin id is connected with another token", ConsoleColor.Red),
             _ => new(status.State.ToString()),
         };
+
+        /// <summary>
+        /// When the token expires; yellow shortly before (within a day, or a tenth of a shorter lifetime), red
+        /// once expired. Coarse, so the screen redraws only when the text changes.
+        /// </summary>
+        internal static Segment Expiry(OriginToken token, DateTimeOffset now)
+        {
+            var when = token.Expires.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+            var left = token.Expires - now;
+            if (left <= TimeSpan.Zero)
+                return new($"{when} (expired; get a new token)", ConsoleColor.Red);
+
+            var soon = TimeSpan.FromTicks(Math.Min(TimeSpan.FromDays(1).Ticks, (token.Expires - token.IssuedAt).Ticks / 10));
+            var inText = left.TotalDays >= 2 ? $"in {(int)left.TotalDays} days"
+                : left.TotalHours >= 2 ? $"in {(int)left.TotalHours} hours"
+                : $"in {Math.Max(1, (int)left.TotalMinutes)} min";
+            return left <= soon
+                ? new($"{when} ({inText}; get a new token soon)", ConsoleColor.Yellow)
+                : new($"{when} ({inText})");
+        }
 
         private static ConsoleColor StatusColor(int statusCode) => statusCode switch
         {

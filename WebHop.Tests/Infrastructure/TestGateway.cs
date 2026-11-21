@@ -1,3 +1,4 @@
+using WebHop.Core;
 using WebHop.Gateway;
 
 namespace WebHop.Tests.Infrastructure
@@ -5,8 +6,6 @@ namespace WebHop.Tests.Infrastructure
     /// <summary>A real gateway on a loopback port, started in-process.</summary>
     internal sealed class TestGateway : IAsyncDisposable
     {
-        public const string AuthToken = "test-auth-token";
-
         private TestGateway(WebApplication app, string url)
         {
             App = app;
@@ -20,16 +19,21 @@ namespace WebHop.Tests.Infrastructure
         public TunnelRegistry Registry => App.Services.GetRequiredService<TunnelRegistry>();
 
         /// <param name="port">0 picks a free port; pass a previous gateway's port to restart "the same" gateway.</param>
-        /// <param name="maxWebSockets">Sets WebHop:MaxWebSockets, so the gateway advertises a per-origin tunnel cap.</param>
+        /// <param name="maxWebSockets">Sets WebHop:MaxWebSockets, so the gateway caps tunnels per origin.</param>
         /// <param name="listenHost">
         /// "localhost" listens on both loopback addresses, so the gateway is reachable under two names
         /// (127.0.0.1 and localhost); it needs a fixed port.
         /// </param>
-        public static async Task<TestGateway> StartAsync(string? authToken = AuthToken, int port = 0, int? maxWebSockets = null, string listenHost = "127.0.0.1")
+        /// <param name="keys">The issuer's set; <see cref="TestKeys.Set"/> by default.</param>
+        public static Task<TestGateway> StartAsync(int port = 0, int? maxWebSockets = null, string listenHost = "127.0.0.1", KeySet? keys = null) =>
+            StartWithSettingAsync((keys ?? TestKeys.Set).Encode(), port, maxWebSockets, listenHost);
+
+        /// <param name="keySetSetting">The WebHop:KeySet setting as given; null for none.</param>
+        public static async Task<TestGateway> StartWithSettingAsync(string? keySetSetting, int port = 0, int? maxWebSockets = null, string listenHost = "127.0.0.1")
         {
             List<string> args = ["--urls", $"http://{listenHost}:{port}", "--Logging:LogLevel:Default=Warning"];
-            if (authToken is not null)
-                args.Add($"--WebHop:AuthToken={authToken}");
+            if (keySetSetting is not null)
+                args.Add($"--WebHop:KeySet={keySetSetting}");
             if (maxWebSockets is { } max)
                 args.Add($"--WebHop:MaxWebSockets={max}");
 
@@ -40,6 +44,13 @@ namespace WebHop.Tests.Infrastructure
         }
 
         public int Port => new Uri(Url).Port;
+
+        /// <summary>The Host header of requests to <see cref="Url"/>.</summary>
+        public string Host => new Uri(Url).Authority;
+
+        /// <summary>The tunnel endpoint's WebSocket URL on <paramref name="host"/> (this gateway's address by default).</summary>
+        public Uri TunnelUri(string? host = null, string endpoint = "/webhop") =>
+            new($"ws://{host ?? "127.0.0.1"}:{Port}{endpoint}");
 
         public async ValueTask DisposeAsync()
         {

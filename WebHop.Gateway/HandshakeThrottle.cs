@@ -5,10 +5,11 @@ using System.Net.Sockets;
 namespace WebHop.Gateway
 {
     /// <summary>
-    /// Holds off tunnel handshakes from an address that keeps presenting wrong auth tokens, so a token can't be
-    /// guessed at line rate. After <see cref="Limit"/> rejected tokens within <see cref="Window"/> of the first, the
-    /// address is answered 429 until that window is over, without its token being checked. Only rejected tokens
-    /// count: origins reconnect all the time (every aborted response closes a tunnel), and those are never held off.
+    /// Holds off tunnel handshakes from an address that keeps presenting refused tokens (401: bad, expired or
+    /// revoked; 403: not for the host), so tokens can't be tried at line rate. After <see cref="Limit"/> refused
+    /// tokens within <see cref="Window"/> of the first, the address is answered 429 until that window is over,
+    /// without its token being checked. Only refused tokens count: origins reconnect all the time (every aborted
+    /// response closes a tunnel), and those are never held off.
     /// IPv6 addresses count per /64, the block one host usually has to itself.
     /// </summary>
     /// <remarks>
@@ -61,7 +62,7 @@ namespace WebHop.Gateway
             foreach (var (key, entry) in rejected)
                 if (now - entry.Since >= WindowMs)
                     rejected.TryRemove(key, out _);
-            // Wrong tokens from more addresses than that within one window: forget them rather than keep growing
+            // Refused tokens from more addresses than that within one window: forget them rather than keep growing
             if (rejected.Count > 2 * Tracked)
                 rejected.Clear();
         }

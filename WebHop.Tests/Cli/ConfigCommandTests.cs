@@ -1,4 +1,5 @@
 using WebHop.CLI;
+using WebHop.Core.Commands;
 using WebHop.Tests.Infrastructure;
 
 namespace WebHop.Tests.Cli
@@ -31,17 +32,28 @@ namespace WebHop.Tests.Cli
         public void Add_authtoken_saves_the_token_and_keeps_other_settings()
         {
             new CliConfig { GatewayUrl = "https://gw.example.com/" }.Save(ConfigPath);
+            var token = TestKeys.Token(origin: "app1", audience: ["http://localhost/drop/"]);
 
-            var exitCode = Run("add-authtoken", "tok");
+            var exitCode = Run("add-authtoken", token);
 
             var config = CliConfig.Load(ConfigPath);
             using (Assert.EnterMultipleScope())
             {
                 Assert.That(exitCode, Is.Zero);
-                Assert.That(config.AuthToken, Is.EqualTo("tok"));
+                Assert.That(config.AuthToken, Is.EqualTo(token));
                 Assert.That(config.GatewayUrl, Is.EqualTo("https://gw.example.com/"));
                 Assert.That(output.Text, Does.Contain("Auth token saved"));
+                Assert.That(output.Text, Does.Contain("origin       app1").And.Contain("serves       http://localhost/drop/"));
             }
+        }
+
+        [Test]
+        public void Add_authtoken_rejects_what_is_not_a_webhop_token()
+        {
+            var error = Assert.Throws<CliException>(() => Run("add-authtoken", "s3cr3t-token"));
+
+            Assert.That(error.Message, Does.Contain("wh_"));
+            Assert.That(File.Exists(ConfigPath), Is.False);
         }
 
         [Test]
@@ -75,11 +87,11 @@ namespace WebHop.Tests.Cli
             }
         }
 
-        [TestCase("abcdefgh", "ab********")]
-        [TestCase("abcd", "****")]
-        public void Check_shows_the_settings_with_a_masked_token(string authToken, string masked)
+        [Test]
+        public void Check_shows_the_settings_with_a_masked_token_and_what_it_says()
         {
-            new CliConfig { AuthToken = authToken, GatewayUrl = "https://gw.example.com/" }.Save(ConfigPath);
+            var token = TestKeys.Token(origin: "app1");
+            new CliConfig { AuthToken = token, GatewayUrl = "https://gw.example.com/" }.Save(ConfigPath);
 
             var exitCode = Run("check");
 
@@ -87,8 +99,18 @@ namespace WebHop.Tests.Cli
             {
                 Assert.That(exitCode, Is.Zero);
                 Assert.That(output.Text, Does.Contain("https://gw.example.com/"));
-                Assert.That(output.Text, Does.Contain($"authtoken    {masked}{Environment.NewLine}"));
+                Assert.That(output.Text, Does.Contain($"authtoken    wh********{Environment.NewLine}"));
+                Assert.That(output.Text, Does.Not.Contain(token[3..]));
+                Assert.That(output.Text, Does.Contain("origin       app1").And.Contain("expires"));
             }
+        }
+
+        [Test]
+        public void Check_rejects_a_token_that_is_not_a_webhop_token()
+        {
+            new CliConfig { AuthToken = "abcdefgh" }.Save(ConfigPath);
+
+            Assert.Throws<CliException>(() => Run("check"));
         }
 
         [Test]

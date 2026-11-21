@@ -6,7 +6,14 @@
     <Nullable>enable</Nullable>
 
     <PackageId>WebHop.Core</PackageId>
-    <Description>Shared types for WebHop: the tunnel stream, header names and constants. Installed with WebHop.Origin and WebHop.Gateway; you do not need to reference it directly.</Description>
+    <Description>Shared types for WebHop: the tunnel stream, header names, constants, and origin tokens: reading them, issuing them from an issuer's key set (ES256) and checking them as the gateway does. No dependencies beyond .NET. Installed with WebHop.Origin and WebHop.Gateway; reference it directly only to issue tokens from your own app.</Description>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The issuer and token commands, shared by both tools -->
+    <InternalsVisibleTo Include="webhop" />
+    <InternalsVisibleTo Include="webhop-gen" />
+    <InternalsVisibleTo Include="WebHop.Tests" />
+  </ItemGroup>
 
 </Project>

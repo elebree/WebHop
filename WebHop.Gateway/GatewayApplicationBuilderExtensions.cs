@@ -8,51 +8,60 @@ namespace Microsoft.AspNetCore.Builder
     public static class GatewayApplicationBuilderExtensions
     {
         /// <summary>
-        /// Routes traffic through the WebHop gateway. Origins open tunnels at
-        /// <see cref="Constants.DefaultWebHopEndpoint"/> and serve the host name they opened them on;
-        /// every other request is forwarded round-robin to an origin connected on the request's host.
-        /// When none is, the request falls through to the next middleware, so a host can serve its own
-        /// content (or end the pipeline with a 503).
-        /// Call <c>AddWebHopGateway()</c> first and <c>UseWebSockets()</c> before this.
+        /// Routes traffic through the WebHop gateway. Origins open tunnels at the key set's tunnel endpoint
+        /// (<see cref="Constants.DefaultWebHopEndpoint"/> unless it names another), with a token that says what
+        /// they serve. Every other request is forwarded to an origin serving its host and path; when none does,
+        /// it falls through to the next middleware, so a host can serve its own content (or end the pipeline
+        /// with a 503). Call <c>AddWebHopGateway()</c> first and <c>UseWebSockets()</c> before this.
         /// </summary>
         public static IApplicationBuilder UseWebHopGateway(this IApplicationBuilder app)
         {
             var services = app.ApplicationServices;
             var registry = services.GetRequiredService<TunnelRegistry>();
             var authorization = services.GetRequiredService<TunnelAuthorization>();
-            var throttle = services.GetRequiredService<HandshakeThrottle>();
             var forwarder = services.GetRequiredService<IHttpForwarder>();
             var tunnelClient = services.GetRequiredService<GatewayTunnelClient>();
-            var lifetime = services.GetRequiredService<IHostApplicationLifetime>();
             var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(GatewayApplicationBuilderExtensions).Namespace!);
 
-            if (!authorization.IsConfigured)
-                logger.LogError("No auth token: set {Variable} or the {Setting} setting. The gateway accepts no tunnels until then", Constants.AuthTokenEnvironmentVariable, Constants.AuthTokenSetting);
+            if (authorization.Error is { } error)
+                logger.LogError("Cannot use the key set: {Error} The gateway accepts no tunnels until it's fixed", error.TrimEnd('.') + ".");
+            else if (authorization.Keys is not { } keys)
+                logger.LogError("No key set: set {Variable} or the {Setting} setting to the public set from `webhop-gen issuer public`. The gateway accepts no tunnels until then",
+                    Constants.KeySetEnvironmentVariable, Constants.KeySetSetting);
+            else
+                // Nobody can read the encoded form, so say what was loaded
+                logger.LogInformation("Accepting tunnels at {Endpoint} with tokens of issuer {Issuer}, keys {Keys}, serving within {Allow}",
+                    keys.Endpoint, keys.Issuer, string.Join(", ", keys.Keys.Select(k => k.KeyId)), string.Join(", ", keys.Allow));
 
             // How many tunnels one origin may keep open, from the host's WebSocket budget (0 = unlimited)
             var maxConnectionsPerOrigin = WebSocketBudget.PerOriginCap(services.GetRequiredService<IConfiguration>());
             if (maxConnectionsPerOrigin > 0)
-                logger.LogInformation("Advertising up to {Max} tunnels per origin (host WebSocket budget)", maxConnectionsPerOrigin);
+                logger.LogInformation("Allowing up to {Max} tunnels per origin (host WebSocket budget)", maxConnectionsPerOrigin);
+
+            var endpoint = authorization.Endpoint;
+            var statusPath = endpoint + "/status";
+            var tunnels = new TunnelEndpoint(registry, authorization, services.GetRequiredService<HandshakeThrottle>(),
+                services.GetRequiredService<IHostApplicationLifetime>(), logger, maxConnectionsPerOrigin);
 
             return app.Use(async (context, next) =>
             {
                 var path = context.Request.Path;
 
-                if (path.Equals(Constants.DefaultWebHopEndpoint + "/status", StringComparison.OrdinalIgnoreCase))
+                if (path.Equals(statusPath, StringComparison.OrdinalIgnoreCase))
                 {
                     await context.Response.WriteAsync("WebHop Gateway status");
                     return;
                 }
 
                 // Origins open tunnel streams here: one WebSocket per HTTP connection
-                if (path.Equals(Constants.DefaultWebHopEndpoint, StringComparison.OrdinalIgnoreCase))
+                if (path.Equals(endpoint, StringComparison.OrdinalIgnoreCase))
                 {
-                    await AcceptTunnelAsync(context, registry, authorization, throttle, lifetime, logger, maxConnectionsPerOrigin);
+                    await tunnels.AcceptAsync(context);
                     return;
                 }
 
-                // Public traffic: forward to an origin connected on this host, or fall through when none is
-                var originId = registry.PickOrigin(TunnelRegistry.HostKey(context.Request.Host));
+                // Public traffic: forward to an origin serving this host and path, or fall through when none does
+                var originId = registry.PickOrigin(TunnelRegistry.HostKey(context.Request.Host), path.Value ?? "/");
                 if (originId is null)
                 {
                     await next(context);
@@ -70,67 +79,6 @@ namespace Microsoft.AspNetCore.Builder
                     logger.Log(level, "{OriginId} {RequestId} forwarding failed: {Error} {Message}", originId, context.TraceIdentifier, error, exception?.Message);
                 }
             });
-        }
-
-        private static async Task AcceptTunnelAsync(HttpContext context, TunnelRegistry registry, TunnelAuthorization authorization, HandshakeThrottle throttle, IHostApplicationLifetime lifetime, ILogger logger, int maxConnectionsPerOrigin)
-        {
-            string? originId = context.Request.Query[Constants.OriginIdParameter];
-            if (!context.WebSockets.IsWebSocketRequest || !TunnelRegistry.IsValidOriginId(originId))
-            {
-                context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                return;
-            }
-
-            // An address that presented too many wrong tokens isn't checked again until its window is over
-            var remoteIp = context.Connection.RemoteIpAddress;
-            if (throttle.HeldOff(remoteIp) is { } wait)
-            {
-                logger.LogDebug("Held off a tunnel from {RemoteIp} for another {Seconds} s", remoteIp, Math.Ceiling(wait.TotalSeconds));
-                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                context.Response.Headers["Retry-After"] = ((int)Math.Ceiling(wait.TotalSeconds)).ToString();
-                return;
-            }
-
-            if (!authorization.IsAuthorized(context))
-            {
-                if (authorization.IsConfigured)
-                {
-                    logger.LogWarning("Rejected tunnel from {RemoteIp}: invalid auth token", remoteIp);
-                    if (throttle.Reject(remoteIp))
-                        logger.LogWarning("Holding off tunnels from {RemoteIp}: {Limit} invalid auth tokens within {Seconds} s",
-                            remoteIp, HandshakeThrottle.Limit, HandshakeThrottle.Window.TotalSeconds);
-                }
-                else
-                {
-                    // Nothing to guess without a token: every tunnel is turned away, and that's logged at startup
-                    logger.LogWarning("Rejected tunnel from {RemoteIp}: the gateway has no auth token configured", remoteIp);
-                }
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                return;
-            }
-
-            // The origin serves the host it reached the gateway on; one id can't serve two hosts at once
-            var host = TunnelRegistry.HostKey(context.Request.Host);
-            if (registry.ServesOtherHost(originId!, host))
-            {
-                logger.LogWarning("Rejected tunnel of {OriginId} on {Host}: it is connected on another host", originId, host);
-                context.Response.StatusCode = StatusCodes.Status409Conflict;
-                return;
-            }
-
-            // Tell the origin how many tunnels it may keep open, so it won't exhaust the host's WebSocket budget
-            if (maxConnectionsPerOrigin > 0)
-                context.Response.Headers[Headers.XWebhopMaxConnections] = maxConnectionsPerOrigin.ToString();
-
-            // Echo only the fixed marker when a browser authenticated through a subprotocol, never the token
-            var subProtocol = context.WebSockets.WebSocketRequestedProtocols.Contains(Constants.WebHopSubprotocol)
-                ? Constants.WebHopSubprotocol
-                : null;
-            var webSocket = await context.WebSockets.AcceptWebSocketAsync(subProtocol);
-            // Close tunnels as soon as the gateway stops; otherwise shutdown waits for each tunnel
-            // request until the host's 30 s timeout, and origins reconnect that much later
-            using var closing = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, lifetime.ApplicationStopping);
-            await registry.RunTunnelAsync(host, originId!, new TunnelStream(webSocket), closing.Token);
         }
     }
 }

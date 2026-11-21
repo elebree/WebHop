@@ -1,12 +1,14 @@
 using WebHop.CLI;
+using WebHop.Core.Commands;
 using WebHop.Core;
 using WebHop.Tests.Infrastructure;
 
 namespace WebHop.Tests.Cli
 {
     /// <summary>
-    /// `webhop http` fails before starting anything when the gateway or auth token is missing. It
-    /// reads WEBHOP_URL and WEBHOP_AUTHTOKEN, so these tests clear them and don't run in parallel.
+    /// `webhop http` fails before starting anything when the token is missing or unusable, or names no
+    /// gateway and none is given. It reads WEBHOP_URL and WEBHOP_AUTHTOKEN, so these tests clear them and
+    /// don't run in parallel.
     /// </summary>
     [NonParallelizable]
     public class HttpCommandStartupTests
@@ -34,14 +36,6 @@ namespace WebHop.Tests.Cli
         }
 
         [Test]
-        public async Task Without_a_gateway_it_refuses_to_start()
-        {
-            var error = await Assert.ThrowsAsync<CliException>(() => Run());
-
-            Assert.That(error.Message, Does.StartWith("No gateway."));
-        }
-
-        [Test]
         public async Task Without_an_auth_token_it_refuses_to_start()
         {
             var error = await Assert.ThrowsAsync<CliException>(() => Run("--url", "https://gw.example.com/"));
@@ -50,24 +44,41 @@ namespace WebHop.Tests.Cli
         }
 
         [Test]
-        public async Task The_gateway_can_come_from_the_config_file()
+        public async Task With_something_else_than_a_token_it_refuses_to_start()
         {
-            new CliConfig { GatewayUrl = "https://gw.example.com/" }.Save(ConfigPath);
+            var error = await Assert.ThrowsAsync<CliException>(() => Run("--token", "s3cr3t-token"));
 
-            var error = await Assert.ThrowsAsync<CliException>(() => Run());
-
-            // Got past the gateway check
-            Assert.That(error.Message, Does.StartWith("No auth token."));
+            Assert.That(error.Message, Does.Contain("wh_"));
         }
 
         [Test]
-        public async Task The_gateway_can_come_from_the_environment()
+        public async Task A_token_serving_paths_alone_needs_a_gateway()
         {
-            env.Set("WEBHOP_URL", "https://gw.example.com/");
+            var error = await Assert.ThrowsAsync<CliException>(() => Run("--token", TestKeys.Token(audience: ["/api/"])));
+
+            Assert.That(error.Message, Does.StartWith("No gateway").And.Contain("/api/"));
+        }
+
+        [Test]
+        public async Task The_token_can_come_from_the_environment()
+        {
+            env.Set(Constants.AuthTokenEnvironmentVariable, TestKeys.Token(audience: ["/api/"]));
 
             var error = await Assert.ThrowsAsync<CliException>(() => Run());
 
-            Assert.That(error.Message, Does.StartWith("No auth token."));
+            // Got past the token check
+            Assert.That(error.Message, Does.StartWith("No gateway"));
+        }
+
+        [Test]
+        public async Task The_gateway_can_come_from_the_config_file()
+        {
+            new CliConfig { GatewayUrl = "https://gw.example.com/app/" }.Save(ConfigPath);
+
+            var error = await Assert.ThrowsAsync<CliException>(() => Run("--token", TestKeys.Token()));
+
+            // Read it, and refused its path
+            Assert.That(error.Message, Does.Contain("https://gw.example.com/app/").And.Contain("path"));
         }
 
         [Test]
@@ -75,7 +86,7 @@ namespace WebHop.Tests.Cli
         {
             env.Set("WEBHOP_URL", "my-gateway");
 
-            var error = await Assert.ThrowsAsync<CliException>(() => Run());
+            var error = await Assert.ThrowsAsync<CliException>(() => Run("--token", TestKeys.Token()));
 
             Assert.That(error.Message, Does.Contain("my-gateway"));
         }

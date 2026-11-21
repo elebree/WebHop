@@ -1,4 +1,5 @@
 using WebHop.CLI;
+using WebHop.Core.Commands;
 
 namespace WebHop.Tests.Cli
 {
@@ -21,18 +22,26 @@ namespace WebHop.Tests.Cli
             Assert.Throws<CliException>(() => HttpOptions.ParseTarget(value));
         }
 
-        [TestCase("https://gw.example.com/")]
-        [TestCase("http://localhost:5199")]
-        [TestCase("wss://gw.example.com/webhop")]
-        public void Gateway_urls_must_be_http_or_websocket(string value)
+        [TestCase("https://gw.example.com/", "https://gw.example.com/")]
+        [TestCase("http://localhost:5199", "http://localhost:5199/")]
+        [TestCase("wss://gw.example.com:8443", "wss://gw.example.com:8443/")]
+        public void Gateway_urls_are_http_or_websocket_scheme_host_and_port(string value, string expected)
         {
-            Assert.That(HttpOptions.ParseGateway(value), Is.EqualTo(new Uri(value)));
+            Assert.That(HttpOptions.ParseGateway(value).AbsoluteUri, Is.EqualTo(expected));
         }
 
         [Test]
         public void A_gateway_that_is_not_a_url_is_rejected()
         {
             Assert.Throws<CliException>(() => HttpOptions.ParseGateway("my-gateway"));
+        }
+
+        [TestCase("wss://gw.example.com/webhop")]
+        [TestCase("https://gw.example.com/app/")]
+        public void A_gateway_url_with_a_path_is_rejected_pointing_to_the_token(string value)
+        {
+            var error = Assert.Throws<CliException>(() => HttpOptions.ParseGateway(value));
+            Assert.That(error.Message, Does.Contain("aud").And.Contain("ept"));
         }
 
         [Test]
@@ -52,7 +61,7 @@ namespace WebHop.Tests.Cli
         public void All_flags_are_read()
         {
             var options = HttpOptions.Parse([
-                "3000", "--url=https://gw/", "--authtoken", "tok", "--host-header=rewrite",
+                "3000", "--url=https://gw/", "--token", "tok", "--host-header=rewrite",
                 "--connections", "4", "--log-level=warn", "--log-format=json", "--config", "my.json",
             ])!;
 

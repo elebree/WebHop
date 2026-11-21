@@ -5,7 +5,7 @@ namespace WebHop.CLI
     internal sealed class HttpOptions
     {
         private static readonly HashSet<string> ValueFlags =
-            ["url", "authtoken", "host-header", "connections", "log", "log-level", "log-format", "config"];
+            ["url", "token", "host-header", "connections", "log", "log-level", "log-format", "config"];
 
         private static readonly HashSet<string> BoolFlags = ["help"];
 
@@ -39,7 +39,7 @@ namespace WebHop.CLI
             {
                 Target = ParseTarget(target),
                 Url = parsed.Get("url"),
-                AuthToken = parsed.Get("authtoken"),
+                AuthToken = parsed.Get("token"),
                 HostHeader = parsed.Get("host-header"),
                 Connections = parsed.Get("connections") is { } c
                     ? int.TryParse(c, out var n) && n > 0 ? n : throw new CliException("--connections needs a positive number.")
@@ -86,12 +86,18 @@ namespace WebHop.CLI
             throw new CliException($"`{value}` is not a port, host:port or http(s) URL.");
         }
 
+        /// <summary>
+        /// A gateway URL overriding the token's host: scheme, host and port only, as the token says what to
+        /// serve (aud) and where tunnels connect (ept).
+        /// </summary>
         public static Uri ParseGateway(string value)
         {
-            if (Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" or "ws" or "wss")
-                return uri;
+            if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https" or "ws" or "wss"))
+                throw new CliException($"`{value}` is not a gateway URL, for example https://my-gateway.azurewebsites.net/");
+            if (uri.AbsolutePath != "/" || uri.Query.Length > 0 || uri.Fragment.Length > 0)
+                throw new CliException($"The gateway URL {value} has a path. It takes the scheme, host and port only: the token's aud says what to serve, and its ept where tunnels connect.");
 
-            throw new CliException($"`{value}` is not a gateway URL, for example https://my-gateway.azurewebsites.net/");
+            return new Uri(uri.GetLeftPart(UriPartial.Authority) + "/");
         }
     }
 }

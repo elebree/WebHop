@@ -16,7 +16,7 @@ namespace WebHop.Origin
         public override string ToString() => tunnelUri.ToString();
     }
 
-    internal sealed class WebHopConnectionListenerFactory(WebHopServerOptions options, ILoggerFactory loggerFactory) : IConnectionListenerFactory
+    internal sealed class WebHopConnectionListenerFactory(WebHopServerOptions options, OriginToken token, ILoggerFactory loggerFactory) : IConnectionListenerFactory
     {
         public WebHopConnectionListener? Listener { get; private set; }
 
@@ -25,18 +25,18 @@ namespace WebHop.Origin
             if (endpoint is not WebHopEndPoint webHopEndPoint)
                 throw new NotSupportedException($"{endpoint.GetType()} is not supported by the WebHop transport.");
 
-            Listener = new WebHopConnectionListener(webHopEndPoint, options, loggerFactory.CreateLogger<WebHopServer>());
+            Listener = new WebHopConnectionListener(webHopEndPoint, options, token, loggerFactory.CreateLogger<WebHopServer>());
             return ValueTask.FromResult<IConnectionListener>(Listener);
         }
     }
 
     /// <summary>
-    /// Keeps up to <see cref="WebHopServerOptions.MaxConnections"/> tunnel streams open to the gateway
-    /// and hands each one to Kestrel as an accepted connection.
+    /// Keeps up to <see cref="WebHopServerOptions.MaxConnections"/> tunnel streams open to the gateway, no more
+    /// than the token's <c>tun</c> and the gateway allow, and hands each one to Kestrel as an accepted connection.
     /// </summary>
-    internal sealed class WebHopConnectionListener(WebHopEndPoint endpoint, WebHopServerOptions options, ILogger logger) : IConnectionListener
+    internal sealed class WebHopConnectionListener(WebHopEndPoint endpoint, WebHopServerOptions options, OriginToken token, ILogger logger) : IConnectionListener
     {
-        private enum Failure { None, Unreachable, Unauthorized, Refused }
+        private enum Failure { None, Unreachable, Unauthorized, Forbidden, Conflict, Refused }
 
         // Pulsed when a tunnel closes, so a parked AcceptAsync can open a replacement.
         private readonly SemaphoreSlim room = new(0);
@@ -46,8 +46,15 @@ namespace WebHop.Origin
         // Per-origin tunnel cap the gateway advertised on the handshake; 0 until learned (then unlimited stays 0).
         private volatile int advertisedCap;
 
-        /// <summary>The smaller of the configured ceiling and any cap the gateway advertised.</summary>
-        private int EffectiveMax => advertisedCap > 0 ? Math.Min(options.MaxConnections, advertisedCap) : options.MaxConnections;
+        /// <summary>The smallest of the configured ceiling, the token's tun and any cap the gateway advertised.</summary>
+        private int EffectiveMax
+        {
+            get
+            {
+                var max = Math.Min(options.MaxConnections, token.Tunnels);
+                return advertisedCap > 0 ? Math.Min(max, advertisedCap) : max;
+            }
+        }
 
         // Kestrel calls AcceptAsync one at a time, so these are only written there;
         // Status reads the volatile ones from other threads.
@@ -68,6 +75,8 @@ namespace WebHop.Origin
                     : lastFailure switch
                     {
                         Failure.Unauthorized => WebHopConnectionState.Unauthorized,
+                        Failure.Forbidden => WebHopConnectionState.Forbidden,
+                        Failure.Conflict => WebHopConnectionState.Conflict,
                         Failure.Unreachable => WebHopConnectionState.Offline,
                         // All tunnels dropped after being online: reconnecting, even before an attempt failed
                         _ when connected => WebHopConnectionState.Offline,
@@ -143,20 +152,21 @@ namespace WebHop.Origin
             if (!connected)
             {
                 connected = true;
-                logger.LogInformation("Connected to WebHop gateway {Gateway} as {OriginId}", gateway, options.OriginId);
+                logger.LogInformation("Connected to WebHop gateway {Gateway} as {OriginId}", gateway, token.Subject);
             }
 
-            if (count == options.MaxConnections)
+            var max = EffectiveMax;
+            if (count >= max)
             {
                 if (refusalLogged)
-                    logger.LogInformation("All {Max} tunnels to the WebHop gateway are open now", options.MaxConnections);
+                    logger.LogInformation("All {Max} tunnels to the WebHop gateway are open now", max);
                 else
-                    logger.LogDebug("All {Max} tunnels to the WebHop gateway are open", options.MaxConnections);
+                    logger.LogDebug("All {Max} tunnels to the WebHop gateway are open", max);
                 refusalLogged = false;
             }
             else
             {
-                logger.LogDebug("Tunnel {Count}/{Max} to the WebHop gateway open", count, options.MaxConnections);
+                logger.LogDebug("Tunnel {Count}/{Max} to the WebHop gateway open", count, max);
             }
 
             // A refusal stays relevant until all tunnels are open
@@ -169,50 +179,64 @@ namespace WebHop.Origin
         private TimeSpan OnFailed(HttpStatusCode status, Exception ex, TimeSpan delay)
         {
             var current = Volatile.Read(ref open);
+            var max = EffectiveMax;
             var reason = status != 0 ? $"HTTP {(int)status}" : ex.Message;
-            // Refused only when the gateway's host answered (e.g. Azure's 503 beyond its WebSocket limit);
-            // failing to connect at all is an outage, even while the last tunnels are still closing
-            // 429: the gateway holds off this address after too many wrong tokens, which is a token problem too
-            var failure = status is HttpStatusCode.Unauthorized or HttpStatusCode.TooManyRequests ? Failure.Unauthorized
-                : status != 0 && current > 0 ? Failure.Refused
-                : Failure.Unreachable;
+            var host = endpoint.TunnelUri.Host;
+            // 401: a bad, expired or revoked token; 429: the gateway holds off this address after too many refused
+            // tokens, a token problem too; 403: the token doesn't cover the host; 409: the origin id is connected
+            // with a token for something else. Refused only when the gateway's host answered otherwise (e.g.
+            // Azure's 503 beyond its WebSocket limit); failing to connect at all is an outage, even while the
+            // last tunnels are still closing.
+            var failure = status switch
+            {
+                HttpStatusCode.Unauthorized or HttpStatusCode.TooManyRequests => Failure.Unauthorized,
+                HttpStatusCode.Forbidden => Failure.Forbidden,
+                HttpStatusCode.Conflict => Failure.Conflict,
+                _ when status != 0 && current > 0 => Failure.Refused,
+                _ => Failure.Unreachable,
+            };
 
             lastError = failure switch
             {
                 Failure.Unauthorized when status == HttpStatusCode.TooManyRequests =>
-                    "the gateway rejected the auth token too often from this address and holds off its tunnels for a minute",
+                    "the gateway refused tokens too often from this address and holds off its tunnels for a minute",
+                Failure.Unauthorized when token.Expires < DateTimeOffset.UtcNow =>
+                    $"the auth token expired at {token.Expires.UtcDateTime:yyyy-MM-dd HH:mm} UTC; issue a new one",
                 Failure.Unauthorized => "the gateway rejected the auth token",
-                Failure.Refused => $"the gateway refused tunnel {current + 1}/{options.MaxConnections} ({reason}); the host probably limits concurrent WebSockets",
+                Failure.Forbidden => $"the gateway refused the token on {host}: what it serves doesn't cover that host, or the gateway doesn't allow it",
+                Failure.Conflict => $"origin id {token.Subject} is connected with a token that serves something else; stop that process or give this one its own token",
+                Failure.Refused => $"the gateway refused tunnel {current + 1}/{max} ({reason}); other processes with this token hold its tunnels, or the host limits concurrent WebSockets",
                 _ => reason,
             };
 
             switch (failure)
             {
-                case Failure.Unauthorized:
-                    if (lastFailure != Failure.Unauthorized)
-                        logger.LogError("WebHop gateway {Gateway} rejected the auth token ({Variable} / {Setting}). Retrying with backoff up to {Max}s",
-                            gateway, Constants.AuthTokenEnvironmentVariable, Constants.AuthTokenSetting, options.MaxReconnectDelay.TotalSeconds);
+                case Failure.Unauthorized or Failure.Forbidden or Failure.Conflict:
+                    if (lastFailure != failure)
+                        logger.LogError("WebHop gateway {Gateway} refused the tunnel: {Error} ({Variable} / {Setting}). Retrying with backoff up to {Max}s",
+                            gateway, lastError, Constants.AuthTokenEnvironmentVariable, Constants.AuthTokenSetting, options.MaxReconnectDelay.TotalSeconds);
                     else
-                        logger.LogDebug("WebHop gateway still rejects the auth token. Retrying in {Delay}s", delay.TotalSeconds);
+                        logger.LogDebug("WebHop gateway still refuses the tunnel ({Reason}). Retrying in {Delay}s", reason, delay.TotalSeconds);
                     break;
 
                 case Failure.Refused:
                     // The gateway works, since other tunnels are open, but it won't take more. Usually the host
-                    // limits concurrent WebSockets. Retrying fast would only produce more refusals.
+                    // limits concurrent WebSockets, or other processes share the token's tunnels. Retrying fast
+                    // would only produce more refusals.
                     delay = options.MaxReconnectDelay;
                     if (!refusalLogged)
                     {
                         refusalLogged = true;
                         logger.LogWarning(
                             "WebHop gateway {Gateway} refused tunnel {Next}/{Max} ({Reason}) while {Open} are open. " +
-                            "The host probably limits concurrent WebSockets (Azure App Service Free plan: 5 per instance). " +
-                            "Serving with {Open} tunnels and retrying every {Delay}s; set WebHop:MaxConnections to {Suggested} " +
-                            "to stop retrying and leave room for visitors' own WebSockets",
-                            gateway, current + 1, options.MaxConnections, reason, current, current, delay.TotalSeconds, Math.Max(1, current - 1));
+                            "Other processes with this token may hold its tunnels, or the host limits concurrent WebSockets " +
+                            "(Azure App Service Free plan: 5 per instance). Serving with {Open} tunnels and retrying every {Delay}s; " +
+                            "set WebHop:MaxConnections to {Suggested} to stop retrying and leave room for visitors' own WebSockets",
+                            gateway, current + 1, max, reason, current, current, delay.TotalSeconds, Math.Max(1, current - 1));
                     }
                     else
                     {
-                        logger.LogDebug("WebHop gateway refused tunnel {Next}/{Max} ({Reason}). Retrying in {Delay}s", current + 1, options.MaxConnections, reason, delay.TotalSeconds);
+                        logger.LogDebug("WebHop gateway refused tunnel {Next}/{Max} ({Reason}). Retrying in {Delay}s", current + 1, max, reason, delay.TotalSeconds);
                     }
                     break;
 

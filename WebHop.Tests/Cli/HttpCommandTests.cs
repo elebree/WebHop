@@ -20,19 +20,6 @@ namespace WebHop.Tests.Cli
             Assert.That(HttpCommand.FormatDuration(TimeSpan.FromMilliseconds(milliseconds)), Is.EqualTo(expected));
         }
 
-        [TestCase("https://gw.example.com/", "https://gw.example.com")]
-        [TestCase("https://gw.example.com:8443/custom/path", "https://gw.example.com:8443")]
-        [TestCase("wss://gw.example.com/webhop", "https://gw.example.com")]
-        [TestCase("ws://localhost:5199/", "http://localhost:5199")]
-        public void The_public_url_is_the_gateways_http_origin(string gateway, string expected)
-        {
-            using var server = new WebHopServer(new WebHopServerOptions(), NullLoggerFactory.Instance);
-
-            var info = new SessionInfo(new Uri(gateway), new Uri("http://localhost:8080/"), server);
-
-            Assert.That(info.PublicUrl, Is.EqualTo(expected));
-        }
-
         [TestCase(null, "public.example.com")]
         [TestCase("rewrite", "localhost:3000")]
         [TestCase("custom.test", "custom.test")]

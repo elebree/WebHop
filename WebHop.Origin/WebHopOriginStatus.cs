@@ -11,8 +11,14 @@ namespace WebHop.Origin
         /// <summary>The gateway cannot be reached; retrying.</summary>
         Offline,
 
-        /// <summary>The gateway rejected the auth token; retrying.</summary>
+        /// <summary>The gateway rejected the token: bad, expired or revoked; retrying.</summary>
         Unauthorized,
+
+        /// <summary>The gateway refused the token on the host the app connects to; retrying.</summary>
+        Forbidden,
+
+        /// <summary>Another process serves the same origin id with a token for something else; retrying.</summary>
+        Conflict,
     }
 
     /// <summary>Snapshot of the tunnels to the gateway.</summary>

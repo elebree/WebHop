@@ -19,22 +19,29 @@ namespace WebHop.Tests.Infrastructure
         /// <summary>Completes when a request to /wait-for-abort sees RequestAborted fire.</summary>
         public TaskCompletionSource RequestAborted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public static Task<TunnelApp> StartAsync(string gatewayUrl, string? authToken = TestGateway.AuthToken, int maxConnections = 4) =>
+        /// <summary>An app connected to <paramref name="gateway"/> with a fresh token for the root path.</summary>
+        public static Task<TunnelApp> StartAsync(TestGateway gateway, int maxConnections = 4) =>
+            StartAsync(gateway.Url, TestKeys.Token(), maxConnections);
+
+        /// <param name="gatewayUrl">Overrides the token's gateway; null connects where the token says.</param>
+        public static Task<TunnelApp> StartAsync(string? gatewayUrl, string? authToken, int maxConnections = 4) =>
             StartAsync(gatewayUrl, o =>
             {
                 o.AuthToken = authToken;
                 o.MaxConnections = maxConnections;
             });
 
-        public static async Task<TunnelApp> StartAsync(string gatewayUrl, Action<WebHopServerOptions> configure)
+        public static async Task<TunnelApp> StartAsync(string? gatewayUrl, Action<WebHopServerOptions> configure)
         {
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [], ContentRootPath = AppContext.BaseDirectory });
             builder.Logging.ClearProviders();
-            builder.WebHost.UseWebHop(gatewayUrl, o =>
+            builder.WebHost.UseWebHop(o =>
             {
                 o.MaxReconnectDelay = TimeSpan.FromSeconds(1);
                 configure(o);
             });
+            // Only the test names the gateway, whatever ASPNETCORE_URLS says
+            builder.WebHost.UseSetting(WebHostDefaults.ServerUrlsKey, gatewayUrl ?? "");
 
             var app = builder.Build();
             var tunnelApp = new TunnelApp(app);
@@ -57,6 +64,7 @@ namespace WebHop.Tests.Infrastructure
             app.UseWebSockets();
 
             app.MapGet("/ping", () => "pong");
+            app.MapGet("/api/ping", () => "api-pong");
 
             app.MapGet("/info", (HttpContext c) => new
             {

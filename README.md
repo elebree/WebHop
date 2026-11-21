@@ -22,17 +22,31 @@ Everything HTTP passes through: streamed bodies of any size, WebSockets, server-
 - [webhop](WebHop.CLI/README.md): an ngrok-style command line tool that exposes any local HTTP server. Start here if you just want to share a local site.
 - [WebHop.Origin](WebHop.Origin/README.md): a library that serves your ASP.NET Core app through the gateway, in place of Kestrel's port.
 - [WebHop.Gateway](WebHop.Gateway/README.md): the public gateway, standalone or as middleware in your ASP.NET Core app.
+- [webhop-gen](WebHop.Gen/README.md): issues the token each server opens tunnels with. [WebHop.Core](WebHop.Core/README.md) is the library behind it, and checks tokens for the gateway too.
 
 ## Quick start
 
-### 1. Deploy a gateway
+Below, `https://gateway.example.com/` stands for your gateway's URL.
 
-The gateway runs on a public host with WebSockets enabled. Pick an auth token (any long random string) and set it on the gateway as `WEBHOP_AUTHTOKEN`. Only servers that present it can open tunnels; public visitors don't need it.
+### 1. Create the gateway's keys
+
+Servers open tunnels with a token you issue for each of them, signed with your key. The gateway checks tokens with your public keys only, so it holds no secret that could make one; public visitors need nothing. On your own machine, create a key set for the gateway with `webhop-gen` (or `webhop`, which has the same commands):
+
+```sh
+dotnet tool install -g webhop-gen
+webhop-gen issuer init gateway.example.com
+```
+
+It keeps the private key set in your user profile and prints the public set, `whk_…`, for the gateway. [webhop-gen](WebHop.Gen/README.md) is also a standalone binary, for machines where only allowed programs run.
+
+### 2. Deploy the gateway
+
+The gateway runs on a public host with WebSockets enabled. Set the public set on it as `WEBHOP_KEYSET`.
 
 [WebHop.Gateway.Host](WebHop.Gateway.Host/README.md) is the ready-to-deploy gateway, with error pages for visitors and the IIS settings Azure App Service needs. Run its Docker image on your host (it serves http on port 8080; put a TLS-terminating proxy in front):
 
 ```sh
-docker run -d -p 8080:8080 -e WEBHOP_AUTHTOKEN=<token> --restart unless-stopped elebree/webhop
+docker run -d -p 8080:8080 -e WEBHOP_KEYSET=<whk_…> --restart unless-stopped elebree/webhop
 ```
 
 Or publish it from a clone of this repository (needs the .NET 10 SDK) and deploy the `gateway` folder like any ASP.NET Core app:
@@ -44,9 +58,15 @@ dotnet publish WebHop/WebHop.Gateway.Host -c Release -o gateway
 
 For **Azure App Service**, follow the [step-by-step guide](WebHop.Gateway.Host/README.md#azure-app-service). To embed the gateway in your own ASP.NET Core app instead, or for reverse proxy and hosting notes, see [WebHop.Gateway](WebHop.Gateway/README.md).
 
-Below, `https://gateway.example.com/` stands for your gateway's URL.
+### 3. Issue a token for your server
 
-### 2a. Expose any local server with `webhop`
+```sh
+webhop-gen token issue gateway.example.com
+```
+
+It prints the server's token, `wh_…`, valid for 30 days. The token says where the gateway is and what the server serves there, so the server needs nothing else. To serve several sites on one gateway, see [Several sites on one gateway](WebHop.Gateway/README.md#several-sites-on-one-gateway).
+
+### 4a. Expose any local server with `webhop`
 
 ```sh
 dotnet tool install -g webhop
@@ -62,17 +82,16 @@ Or download a standalone binary that runs without .NET:
 
 For tunnels that run unattended next to other containers, there's also a [Docker image](WebHop.CLI/README.md#docker).
 
-Point it at your gateway and forward a local port:
+Save the token and forward a local port:
 
 ```sh
-webhop config add-gateway-url https://gateway.example.com/
 webhop config add-authtoken <token>
 webhop http 5000
 ```
 
 The site on `localhost:5000` is now public at `https://gateway.example.com/`. All commands and flags: [webhop](WebHop.CLI/README.md).
 
-### 2b. Or connect an ASP.NET Core app directly
+### 4b. Or connect an ASP.NET Core app directly
 
 ```sh
 dotnet add package WebHop.Origin
@@ -83,10 +102,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseWebHop();
 ```
 
-Start it with the gateway's auth token in `WEBHOP_AUTHTOKEN`, and set `--urls` to the **gateway's** URL. That is both where the app connects and where it listens for requests:
+Start it with the token in `WEBHOP_AUTHTOKEN`, leaving out the launch profile, whose `applicationUrl` would take the gateway's place:
 
 ```sh
-dotnet run --urls https://gateway.example.com/
+WEBHOP_AUTHTOKEN=<token> dotnet run --no-launch-profile
 ```
 
 The app is now public at `https://gateway.example.com/`. Options and configuration: [WebHop.Origin](WebHop.Origin/README.md).

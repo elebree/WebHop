@@ -1,5 +1,5 @@
-# The gateway. Set the auth token first, e.g. in a .env file next to this file:
-#   WEBHOP_AUTHTOKEN=<long random string>
+# The gateway. Set its public key set first, e.g. in a .env file next to this file:
+#   WEBHOP_KEYSET=<the whk_... that `webhop-gen issuer init <host>` prints>
 # then: docker compose up --build   and open http://localhost:8080
 services:
   gateway:
@@ -9,7 +9,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      WEBHOP_AUTHTOKEN: ${WEBHOP_AUTHTOKEN:?Set WEBHOP_AUTHTOKEN}
+      WEBHOP_KEYSET: ${WEBHOP_KEYSET:?Set WEBHOP_KEYSET}
       # A reverse proxy in front (nginx, Traefik, Caddy) on this host or a private network is
       # believed about the client's IP and scheme (X-Forwarded-For/-Proto) without anything set
       # here. Only a proxy that connects from a public address needs the line below, which
