@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
 
     <PackageId>WebHop.Gateway</PackageId>
-    <Description>The WebHop gateway as ASP.NET Core middleware: accept public HTTP traffic and forward it over reverse WebSocket tunnels that servers behind NAT open. Adds AddWebHopGateway() and UseWebHopGateway().</Description>
+    <Description>The WebHop gateway as ASP.NET Core middleware: accept public HTTP traffic and forward it over reverse WebSocket tunnels that servers behind NAT open, each with a signed token that says what it serves. Adds AddWebHopGateway() and UseWebHopGateway().</Description>
   </PropertyGroup>
 
   <ItemGroup>

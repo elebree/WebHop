@@ -9,11 +9,11 @@ namespace WebHop.CLI
     /// </summary>
     internal sealed class CliConfig
     {
-        /// <summary>The gateway's auth token (key named as in ngrok's config).</summary>
+        /// <summary>The origin's token, wh_… (key named as in ngrok's config).</summary>
         [JsonPropertyName("authtoken")]
         public string? AuthToken { get; set; }
 
-        /// <summary>Gateway to connect to when --url is not given.</summary>
+        /// <summary>Gateway to connect to instead of the token's host, when --url is not given.</summary>
         [JsonPropertyName("gateway_url")]
         public string? GatewayUrl { get; set; }
 
@@ -45,7 +45,4 @@ namespace WebHop.CLI
                 File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
     }
-
-    /// <summary>An error shown to the user without a stack trace.</summary>
-    internal sealed class CliException(string message) : Exception(message);
 }

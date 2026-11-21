@@ -7,7 +7,7 @@ browser ──HTTP──▶ WebHop gateway ◀──WebSocket tunnels── your
                   (public host)                          (behind NAT, no open ports)
 ```
 
-You need a running gateway; see [Deploy a gateway](https://github.com/elebree/WebHop#1-deploy-a-gateway).
+You need a running gateway and a token for it; see the [quick start](https://github.com/elebree/WebHop#quick-start).
 
 ## Usage
 
@@ -20,14 +20,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseWebHop();   // instead of listening on a port
 ```
 
-Start the app with the gateway's auth token, and set `--urls` (or `applicationUrl` in `launchSettings.json`) to the **gateway's** URL. That is both where the app connects and where it listens for requests:
+Start the app with its token. The token, `wh_…`, says where the gateway is, what the app serves there and its origin id, so the app needs nothing else:
 
 ```sh
 export WEBHOP_AUTHTOKEN=<token>
-dotnet run --urls https://gateway.example.com/
+dotnet run --no-launch-profile
 ```
 
-Or set both in code:
+`--urls`, or `applicationUrl` in `launchSettings.json`, takes the place of the token's gateway: its scheme, host and port, never a path. Leave it out (that's why `--no-launch-profile` above), unless the token serves paths alone and so names no gateway. In code:
 
 ```csharp
 builder.WebHost.UseWebHop("https://gateway.example.com/", options =>
@@ -38,9 +38,11 @@ builder.WebHost.UseWebHop("https://gateway.example.com/", options =>
 
 The app reconnects on its own when the gateway restarts. Requests arrive with the client's scheme and IP address restored from the gateway's forwarded headers.
 
-## Auth token
+## Token
 
-The app refuses to start without the gateway's auth token. It comes from the `WEBHOP_AUTHTOKEN` environment variable, the `WebHop:AuthToken` configuration key, or `options.AuthToken`. Keep it out of `appsettings.json` in source control.
+The app refuses to start without a token. It comes from the `WEBHOP_AUTHTOKEN` environment variable, the `WebHop:AuthToken` configuration key, or `options.AuthToken`. Whoever issues tokens for the gateway makes one with `webhop-gen token issue`. Keep it out of `appsettings.json` in source control: whoever reads it can serve as your app until it expires or is revoked.
+
+`WebHopServer.Status` says why the gateway refuses the token: `Unauthorized` (bad, expired or revoked), `Forbidden` (it doesn't serve the host the app connects to) or `Conflict` (another process serves the same origin id with a token for something else). The app keeps retrying, so it connects once the token is replaced.
 
 ## Options
 
@@ -48,15 +50,15 @@ The app refuses to start without the gateway's auth token. It comes from the `WE
 
 | Option | Default | Meaning |
 |---|---|---|
-| `AuthToken` | `WEBHOP_AUTHTOKEN` | The gateway's auth token |
-| `MaxConnections` | 10 | Tunnels kept open; caps concurrent requests and WebSockets. The gateway may advertise a lower limit, and the smaller one wins |
-| `OriginId` | random | How the gateway identifies this app |
+| `AuthToken` | `WEBHOP_AUTHTOKEN` | The app's token, `wh_…` |
+| `MaxConnections` | 10 | Tunnels kept open; caps concurrent requests and WebSockets. The token (3 unless it says otherwise) and the gateway may set a lower limit, and the smallest wins |
 | `MaxReconnectDelay` | 30 s | Upper bound of the reconnect backoff |
 | `KeepAliveInterval` | 15 s | WebSocket ping interval |
 
 ## Notes
 
-- While no app is connected, the gateway answers 503. A request that gets no response within 120 s gets 504.
+- Requests no connected app serves get a 503 from a standalone gateway. A request that gets no response within 120 s gets 504.
+- The gateway closes the app's tunnels when its token expires; until it has a new one, it reports `Unauthorized`.
 - Requests carry `X-Webhop-Origin-Id` and `X-Webhop-Request-Id`; the request id becomes `HttpContext.TraceIdentifier`.
 - When you run the app from Visual Studio in Development, pages opened through the gateway may trigger a browser prompt about apps on your device. That is Visual Studio's Browser Link and Hot Reload script connecting back to `localhost`; it doesn't happen outside Development.
 

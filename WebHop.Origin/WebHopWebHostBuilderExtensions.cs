@@ -13,9 +13,10 @@ namespace Microsoft.AspNetCore.Hosting
         public const string ConfigurationSection = "WebHop";
 
         /// <summary>
-        /// Serves the app through a WebHop gateway instead of Kestrel. The gateway URL comes from
-        /// --urls / applicationUrl; options are read from the "WebHop" configuration section,
-        /// then <paramref name="configure"/> is applied.
+        /// Serves the app through a WebHop gateway instead of Kestrel. The token (WebHop:AuthToken or
+        /// WEBHOP_AUTHTOKEN) says where to connect; --urls / applicationUrl, if set, overrides the gateway's
+        /// scheme, host and port. Options are read from the "WebHop" configuration section, then
+        /// <paramref name="configure"/> is applied.
         /// </summary>
         public static IWebHostBuilder UseWebHop(this IWebHostBuilder builder, Action<WebHopServerOptions>? configure = null)
         {
@@ -32,7 +33,10 @@ namespace Microsoft.AspNetCore.Hosting
             });
         }
 
-        /// <summary>Serves the app through the WebHop gateway at <paramref name="gatewayUrl"/>.</summary>
+        /// <summary>
+        /// Serves the app through the WebHop gateway at <paramref name="gatewayUrl"/>, which takes the scheme,
+        /// host and port only, instead of the one the token names.
+        /// </summary>
         public static IWebHostBuilder UseWebHop(this IWebHostBuilder builder, string gatewayUrl, Action<WebHopServerOptions>? configure = null)
         {
             return builder.UseWebHop(configure).UseUrls(gatewayUrl);

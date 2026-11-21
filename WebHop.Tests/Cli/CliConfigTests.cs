@@ -1,5 +1,6 @@
 using System.Text.Json;
 using WebHop.CLI;
+using WebHop.Core.Commands;
 
 namespace WebHop.Tests.Cli
 {

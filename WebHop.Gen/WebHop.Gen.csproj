@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net7.0;net8.0;net9.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>webhop-gen</AssemblyName>
+    <RootNamespace>WebHop.Gen</RootNamespace>
+
+    <!-- dotnet pack makes it installable with: dotnet tool install -g webhop-gen -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>webhop-gen</ToolCommandName>
+    <!-- Also run on runtimes newer than the newest target (e.g. .NET 11) -->
+    <RollForward>Major</RollForward>
+    <PackageId>webhop-gen</PackageId>
+    <Description>Issues the tokens that WebHop origins open tunnels with: creates an issuer's key sets and signs, lists and revokes tokens. Opens no connection; it only reads, signs and writes files.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WebHop.Core\WebHop.Core.csproj" />
+  </ItemGroup>
+
+</Project>
