@@ -27,7 +27,7 @@ namespace WebHop.Core
         public const int DefaultTunnels = 3;
 
         /// <summary>Environment variable holding the origin's token, read by apps and the CLI.</summary>
-        public const string AuthTokenEnvironmentVariable = "WEBHOP_AUTHTOKEN";
+        public const string AuthTokenEnvironmentVariable = "WEBHOP_TOKEN";
 
         /// <summary>
         /// Configuration key for the origin's token (appsettings, user secrets, Azure app settings), read by

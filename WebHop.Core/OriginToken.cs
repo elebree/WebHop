@@ -226,7 +226,7 @@ namespace WebHop.Core
 
         /// <summary>
         /// Where the origin connects: the scheme, host and port of <paramref name="gateway"/> when given
-        /// (<c>--url</c>, <c>--urls</c>), else of the first URL or pattern in <c>aud</c>, at <see cref="Endpoint"/>.
+        /// (<c>--gateway</c>, <c>--urls</c>), else of the first URL or pattern in <c>aud</c>, at <see cref="Endpoint"/>.
         /// Null when the token serves only paths and no gateway is given.
         /// </summary>
         public Uri? TunnelUri(Uri? gateway)

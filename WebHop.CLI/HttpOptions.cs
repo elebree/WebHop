@@ -5,12 +5,12 @@ namespace WebHop.CLI
     internal sealed class HttpOptions
     {
         private static readonly HashSet<string> ValueFlags =
-            ["url", "token", "host-header", "connections", "log", "log-level", "log-format", "config"];
+            ["gateway", "token", "host-header", "connections", "log", "log-level", "log-format"];
 
         private static readonly HashSet<string> BoolFlags = ["help"];
 
         public required Uri Target { get; init; }
-        public string? Url { get; init; }
+        public string? Gateway { get; init; }
         public string? AuthToken { get; init; }
         public string? HostHeader { get; init; }
         public int? Connections { get; init; }
@@ -18,7 +18,6 @@ namespace WebHop.CLI
         public string? LogFile { get; init; }
         public LogLevel LogLevel { get; init; } = LogLevel.Information;
         public bool JsonLogs { get; init; }
-        public string ConfigPath { get; init; } = CliConfig.DefaultPath;
 
         /// <summary>Null when --help was asked for.</summary>
         public static HttpOptions? Parse(IEnumerable<string> args)
@@ -38,7 +37,7 @@ namespace WebHop.CLI
             return new HttpOptions
             {
                 Target = ParseTarget(target),
-                Url = parsed.Get("url"),
+                Gateway = parsed.Get("gateway"),
                 AuthToken = parsed.Get("token"),
                 HostHeader = parsed.Get("host-header"),
                 Connections = parsed.Get("connections") is { } c
@@ -67,7 +66,6 @@ namespace WebHop.CLI
                     "json" => true,
                     var other => throw new CliException($"--log-format must be term or json, not `{other}`."),
                 },
-                ConfigPath = parsed.Get("config") ?? CliConfig.DefaultPath,
             };
         }
 

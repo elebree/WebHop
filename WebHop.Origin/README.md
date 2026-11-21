@@ -23,7 +23,7 @@ builder.WebHost.UseWebHop();   // instead of listening on a port
 Start the app with its token. The token, `wh_…`, says where the gateway is, what the app serves there and its origin id, so the app needs nothing else:
 
 ```sh
-export WEBHOP_AUTHTOKEN=<token>
+export WEBHOP_TOKEN=<token>
 dotnet run --no-launch-profile
 ```
 
@@ -40,7 +40,7 @@ The app reconnects on its own when the gateway restarts. Requests arrive with th
 
 ## Token
 
-The app refuses to start without a token. It comes from the `WEBHOP_AUTHTOKEN` environment variable, the `WebHop:AuthToken` configuration key, or `options.AuthToken`. Whoever issues tokens for the gateway makes one with `webhop-gen token issue`. Keep it out of `appsettings.json` in source control: whoever reads it can serve as your app until it expires or is revoked.
+The app refuses to start without a token. It comes from the `WEBHOP_TOKEN` environment variable, the `WebHop:AuthToken` configuration key, or `options.AuthToken`. Whoever issues tokens for the gateway makes one with `webhop-gen token issue`. Keep it out of `appsettings.json` in source control: whoever reads it can serve as your app until it expires or is revoked.
 
 `WebHopServer.Status` says why the gateway refuses the token: `Unauthorized` (bad, expired or revoked), `Forbidden` (it doesn't serve the host the app connects to) or `Conflict` (another process serves the same origin id with a token for something else). The app keeps retrying, so it connects once the token is replaced.
 
@@ -50,7 +50,7 @@ The app refuses to start without a token. It comes from the `WEBHOP_AUTHTOKEN` e
 
 | Option | Default | Meaning |
 |---|---|---|
-| `AuthToken` | `WEBHOP_AUTHTOKEN` | The app's token, `wh_…` |
+| `AuthToken` | `WEBHOP_TOKEN` | The app's token, `wh_…` |
 | `MaxConnections` | 10 | Tunnels kept open; caps concurrent requests and WebSockets. The token (3 unless it says otherwise) and the gateway may set a lower limit, and the smallest wins |
 | `MaxReconnectDelay` | 30 s | Upper bound of the reconnect backoff |
 | `KeepAliveInterval` | 15 s | WebSocket ping interval |

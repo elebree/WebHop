@@ -14,7 +14,7 @@ namespace Microsoft.AspNetCore.Hosting
 
         /// <summary>
         /// Serves the app through a WebHop gateway instead of Kestrel. The token (WebHop:AuthToken or
-        /// WEBHOP_AUTHTOKEN) says where to connect; --urls / applicationUrl, if set, overrides the gateway's
+        /// WEBHOP_TOKEN) says where to connect; --urls / applicationUrl, if set, overrides the gateway's
         /// scheme, host and port. Options are read from the "WebHop" configuration section, then
         /// <paramref name="configure"/> is applied.
         /// </summary>

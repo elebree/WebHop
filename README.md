@@ -80,11 +80,10 @@ It prints the server's token, `wh_…`, valid for 30 days. The token says where 
 
 ### 4a. Expose any local server with `webhop`
 
-Save the token and forward a local port. On another machine, install `webhop` there first, as in step 1.
+Forward a local port with the token. On another machine, install `webhop` there first, as in step 1.
 
 ```sh
-webhop config add-authtoken <token>
-webhop http 5000
+webhop http 5000 --token <token>
 ```
 
 The site on `localhost:5000` is now public at `https://gateway.example.com/`. For tunnels that run unattended next to other containers, there's also a [Docker image](WebHop.CLI/README.md#docker). All commands and flags: [webhop](WebHop.CLI/README.md).
@@ -100,10 +99,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseWebHop();
 ```
 
-Start it with the token in `WEBHOP_AUTHTOKEN`, leaving out the launch profile, whose `applicationUrl` would take the gateway's place:
+Start it with the token in `WEBHOP_TOKEN`, leaving out the launch profile, whose `applicationUrl` would take the gateway's place:
 
 ```sh
-WEBHOP_AUTHTOKEN=<token> dotnet run --no-launch-profile
+WEBHOP_TOKEN=<token> dotnet run --no-launch-profile
 ```
 
 The app is now public at `https://gateway.example.com/`. Options and configuration: [WebHop.Origin](WebHop.Origin/README.md).

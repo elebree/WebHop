@@ -16,20 +16,22 @@ namespace WebHop.CLI
     /// </summary>
     internal static class HttpCommand
     {
+        /// <summary>The gateway when --gateway is not given.</summary>
+        internal const string GatewayEnvironmentVariable = "WEBHOP_GATEWAY";
+
         public static async Task<int> RunAsync(HttpOptions options)
         {
-            var config = CliConfig.Load(options.ConfigPath);
-            var authToken = options.AuthToken ?? Environment.GetEnvironmentVariable(Constants.AuthTokenEnvironmentVariable) ?? config.AuthToken;
+            var authToken = options.AuthToken ?? Environment.GetEnvironmentVariable(Constants.AuthTokenEnvironmentVariable);
             if (string.IsNullOrWhiteSpace(authToken))
-                throw new CliException("No auth token. Run `webhop config add-authtoken <token>`, pass --token or set WEBHOP_AUTHTOKEN. The gateway's issuer makes one with `webhop-gen token issue`.");
+                throw new CliException($"No auth token. Pass --token or set {Constants.AuthTokenEnvironmentVariable}. The gateway's issuer makes one with `webhop-gen token issue`.");
             if (!OriginToken.TryParse(authToken, out var token, out var problem))
                 throw new CliException($"The auth token can't be used: {problem}.");
 
             // The token names the gateway, unless it serves only paths; these override its scheme, host and port
-            var gatewayValue = options.Url ?? Environment.GetEnvironmentVariable("WEBHOP_URL") ?? config.GatewayUrl;
+            var gatewayValue = options.Gateway ?? Environment.GetEnvironmentVariable(GatewayEnvironmentVariable);
             var gateway = gatewayValue is null ? null : HttpOptions.ParseGateway(gatewayValue);
             if (gateway is null && token.Audience.All(e => e.IsPath))
-                throw new CliException($"No gateway: the token serves only paths ({string.Join(", ", token.Audience)}). Pass --url=https://<your-gateway>/ or run `webhop config add-gateway-url https://<your-gateway>/`.");
+                throw new CliException($"No gateway: the token serves only paths ({string.Join(", ", token.Audience)}). Pass --gateway=https://<your-gateway>/ or set {GatewayEnvironmentVariable}.");
 
             // Like ngrok: the live screen unless logs go to stdout/stderr or output is redirected
             var logTarget = options.Log is LogTarget.None && Console.IsOutputRedirected ? LogTarget.Stdout : options.Log;

@@ -1,18 +1,17 @@
 using System.Reflection;
 using WebHop.CLI;
+using WebHop.Core;
 
 try
 {
     return CommandFirst(args) switch
     {
         ["http", .. var rest] => HttpOptions.Parse(rest) is { } options ? await HttpCommand.RunAsync(options) : Help.Http(),
-        ["config", .. var rest] => ConfigCommand.Run(rest),
         // The same commands as webhop-gen's, for machines where tunnels are allowed anyway
         ["issuer", .. var rest] => IssuerCommands.Create("webhop").RunIssuer(rest),
         ["token", .. var rest] => IssuerCommands.Create("webhop").RunToken(rest),
         ["version" or "--version" or "-v"] => Help.Version(),
         ["help", "http"] => Help.Http(),
-        ["help", "config"] => Help.Config(),
         ["help", "issuer"] => IssuerCommands.Create("webhop").RunIssuer(["help"]),
         ["help", "token"] => IssuerCommands.Create("webhop").RunToken(["help"]),
         [] or ["help" or "--help" or "-h", ..] => Help.General(),
@@ -25,10 +24,10 @@ catch (CliException ex)
     return 1;
 }
 
-// Like ngrok, flags may come before the command (webhop --config x.json http 8080)
+// Like ngrok, flags may come before the command (webhop --log stdout http 8080)
 static string[] CommandFirst(string[] args)
 {
-    string[] valueFlags = ["url", "token", "host-header", "connections", "log", "log-level", "log-format", "config", .. IssuerCommands.ValueFlags];
+    string[] valueFlags = ["gateway", "token", "host-header", "connections", "log", "log-level", "log-format", .. IssuerCommands.ValueFlags];
     for (var i = 0; i < args.Length; i++)
     {
         var arg = args[i];
@@ -66,15 +65,13 @@ internal static class Help
 
             COMMANDS:
               http       start an HTTP tunnel to a local server
-              config     update or inspect the configuration file
               issuer     create and manage key sets, which sign origins' tokens (as webhop-gen)
               token      issue and revoke origins' tokens (as webhop-gen)
               version    print the version
               help       help about any command
 
             EXAMPLES:
-              webhop config add-authtoken <token>
-              webhop http 8080
+              webhop http 8080 --token <token>
               webhop token issue app1.example.com --origin app1
 
             Run `webhop help <command>` for details. Version {AppVersion.Current}.
@@ -92,19 +89,18 @@ internal static class Help
               webhop http [address:port | port | url] [flags]
 
             EXAMPLES:
-              webhop http 8080                             forward to http://localhost:8080
+              webhop http 8080 --token=<token>             forward to http://localhost:8080
+              webhop http 8080                             the same, with the token in {Constants.AuthTokenEnvironmentVariable}
               webhop http app.local:80                     forward to another host on your network
               webhop http https://localhost:7001           forward to a local https server (self-signed is fine)
               webhop http 3000 --host-header=rewrite       send Host: localhost:3000 (Vite, webpack dev server)
-              webhop http 8080 --token=<token>
-              webhop http 8080 --url=https://gw.example.com/   for a token that serves only paths
+              webhop http 8080 --gateway=https://gw.example.com/   for a token that serves only paths
               webhop http 8080 --log=stdout                log lines instead of the live screen
 
             FLAGS:
-              --url string           the gateway's scheme, host and port, instead of the token's
-                                     (default: WEBHOP_URL, then gateway_url from the config file)
-              --token string         the origin's token, wh_… (default: WEBHOP_AUTHTOKEN,
-                                     then authtoken from the config file)
+              --token string         the origin's token, wh_… (default: {Constants.AuthTokenEnvironmentVariable})
+              --gateway string       the gateway's scheme, host and port, instead of the token's
+                                     (default: {HttpCommand.GatewayEnvironmentVariable})
               --host-header string   Host header sent to the local server: `rewrite` for the
                                      target's host, or any value (default: the public host)
               --connections int      tunnels to keep open; caps concurrent requests (default 10,
@@ -113,26 +109,7 @@ internal static class Help
                                      stdout/stderr replace the live screen (default false)
               --log-level string     debug, info, warn, error or crit (default info)
               --log-format string    term or json (default term)
-              --config string        path to the config file (default {CliConfig.DefaultPath})
               -h, --help             help for http
-            """);
-        return 0;
-    }
-
-    public static int Config()
-    {
-        Console.WriteLine($"""
-            NAME:
-              config - update or inspect the configuration file
-
-            USAGE:
-              webhop config add-authtoken <token>      save the origin's token (wh_…)
-              webhop config add-gateway-url <url>      save a gateway to connect to instead of the token's
-              webhop config check                      validate the file and show its settings
-              webhop config edit                       open the file in $VISUAL, $EDITOR or notepad/vi
-
-            FLAGS:
-              --config string    path to the config file (default {CliConfig.DefaultPath})
             """);
         return 0;
     }

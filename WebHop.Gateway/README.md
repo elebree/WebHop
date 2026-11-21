@@ -76,7 +76,7 @@ Embedded with `UseWebHopGateway`, apps can serve parts of your own app, such as 
 ```sh
 webhop-gen issuer init app.example.com/api/v1/
 webhop-gen token issue app.example.com/api/v1/ --relative --lifetime 8h
-webhop http 5000 --url https://app.example.com/       # on the developer's machine, with that token
+webhop http 5000 --gateway https://app.example.com/   # on the developer's machine, with that token
 ```
 
 A token with paths alone doesn't say which gateway it's for, so the app needs the gateway's URL. Paths outside `allow`, such as `/login`, can never be overridden. Requests no app serves fall through to your app, again as soon as the app disconnects. Such an app receives your visitors' requests with their cookies and `Authorization` headers, so issue these tokens only to people who may see them, with a short lifetime.

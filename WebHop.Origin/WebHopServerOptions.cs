@@ -7,7 +7,7 @@ namespace WebHop.Origin
         /// <summary>
         /// The origin's token (<c>wh_…</c>), issued with <c>webhop-gen token issue</c>. It says the origin id,
         /// what the app serves and, unless the gateway URL is given, where to connect. Defaults to the
-        /// WEBHOP_AUTHTOKEN environment variable; UseWebHop overrides it with the WebHop:AuthToken setting when
+        /// WEBHOP_TOKEN environment variable; UseWebHop overrides it with the WebHop:AuthToken setting when
         /// that is present. Sent as a bearer token on every tunnel's WebSocket upgrade, so use a wss://
         /// (https://) gateway outside of development.
         /// </summary>

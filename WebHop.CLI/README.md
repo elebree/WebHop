@@ -23,11 +23,10 @@ On macOS, a binary downloaded with a browser is quarantined; clear that with `xa
 ## Usage
 
 ```sh
-webhop config add-authtoken <token>
-webhop http 5000
+webhop http 5000 --token <token>
 ```
 
-The token, `wh_…`, says where the gateway is, what this tunnel serves there and its origin id, so that's all `webhop` needs. Whoever issues tokens for the gateway makes one with `webhop-gen token issue` (or `webhop token issue`).
+The token, `wh_…`, says where the gateway is, what this tunnel serves there and its origin id, so that's all `webhop` needs. Instead of `--token`, it can come from the `WEBHOP_TOKEN` environment variable. Whoever issues tokens for the gateway makes one with `webhop-gen token issue` (or `webhop token issue`).
 
 ```
 WebHop                                                (Ctrl+C to quit)
@@ -55,27 +54,21 @@ The commands and flags follow ngrok's.
 | Command | What it does |
 |---|---|
 | `webhop http 5000` | Forward to `http://localhost:5000`; also accepts `localhost:5000` or a full URL such as `https://localhost:7001` |
-| `webhop config add-authtoken <token>` | Save the token, and show what it serves and when it expires |
-| `webhop config add-gateway-url <url>` | Save a gateway to connect to instead of the token's, for a token that serves paths alone |
-| `webhop config check` / `config edit` | Show or edit the saved settings |
 | `webhop issuer init\|list\|public\|rotate`, `webhop token issue\|list\|revoke` | Issue tokens for a gateway, as [`webhop-gen`](https://www.nuget.org/packages/webhop-gen) does, for machines where tunnels are allowed anyway |
 | `webhop version` | Show the version |
 | `webhop help [command]`, `webhop <command> --help` | Usage and all flags |
 
 | Flag for `webhop http` | Meaning |
 |---|---|
-| `--token` | The token. Default: `WEBHOP_AUTHTOKEN`, then the saved token |
-| `--url` | The gateway's scheme, host and port, instead of the token's; a token that serves paths alone needs it. Default: `WEBHOP_URL`, then the saved gateway |
+| `--token` | The token. Default: `WEBHOP_TOKEN` |
+| `--gateway` | The gateway's scheme, host and port, instead of the token's; a token that serves paths alone needs it. Default: `WEBHOP_GATEWAY` |
 | `--host-header` | Host header sent to the local server. `rewrite` sends the target's own, such as `localhost:5000`, for dev servers that reject other hosts (Vite, webpack dev server); any other value is sent as is. Default: the public host |
 | `--log=stdout\|stderr\|<file>` | `stdout`/`stderr` print log lines instead of the live screen (also used when output is redirected); a file path keeps the screen and writes the log to the file |
 | `--log-level=debug\|info\|warn\|error\|crit` | How much to log (default `info`) |
 | `--log-format=term\|json` | Log line format |
-| `--config` | Use another config file |
 | `--connections` | Tunnels to keep open, at most the token's limit (WebHop-specific) |
 
 Flags can come in any order, before or after the command, as `--flag value` or `--flag=value`.
-
-The settings are saved in `%APPDATA%\webhop\webhop.json` on Windows and `~/.config/webhop/webhop.json` elsewhere.
 
 ## Docker
 
@@ -84,7 +77,7 @@ The `elebree/webhop-cli` image on Docker Hub (also `ghcr.io/elebree/webhop-cli`)
 Pass the token as an environment variable. Inside a container `localhost` is the container itself, so reach a server on the host as `host.docker.internal` (on Linux, add `--add-host=host.docker.internal:host-gateway`):
 
 ```sh
-docker run --rm -it -e WEBHOP_AUTHTOKEN=<token> elebree/webhop-cli http http://host.docker.internal:5000
+docker run --rm -it -e WEBHOP_TOKEN=<token> elebree/webhop-cli http http://host.docker.internal:5000
 ```
 
 `-it` shows the live screen; without it, `webhop` prints log lines. In Docker Compose, it exposes another service of the stack by its service name:
@@ -97,7 +90,7 @@ services:
     image: elebree/webhop-cli
     command: http http://app:8080
     environment:
-      WEBHOP_AUTHTOKEN: ${WEBHOP_AUTHTOKEN}
+      WEBHOP_TOKEN: ${WEBHOP_TOKEN}
     restart: unless-stopped
 ```
 
@@ -107,7 +100,7 @@ services:
 - Self-signed certificates are accepted for local https targets.
 - If the local server isn't running, visitors get a 502 page that says so.
 - When the gateway refuses the token, the screen says why: unauthorized (bad, expired or revoked), forbidden (it doesn't serve the host `webhop` connects to) or conflict (another process serves the same origin id with a token for something else). Shortly before the token expires, its expiry turns yellow.
-- The settings file holds the token: on Unix it's readable by you only; on Windows it inherits your profile's access rules.
+- A token passed with `--token` may be visible to other users in the process list; on a shared machine, set `WEBHOP_TOKEN` instead.
 - From a clone of the repository, run it with `dotnet run --project WebHop.CLI -f net10.0 -- http 5000`.
 
 ## More

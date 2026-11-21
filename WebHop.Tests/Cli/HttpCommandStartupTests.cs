@@ -7,38 +7,29 @@ namespace WebHop.Tests.Cli
 {
     /// <summary>
     /// `webhop http` fails before starting anything when the token is missing or unusable, or names no
-    /// gateway and none is given. It reads WEBHOP_URL and WEBHOP_AUTHTOKEN, so these tests clear them and
+    /// gateway and none is given. It reads WEBHOP_GATEWAY and WEBHOP_TOKEN, so these tests clear them and
     /// don't run in parallel.
     /// </summary>
     [NonParallelizable]
     public class HttpCommandStartupTests
     {
-        private string directory = null!;
         private EnvironmentVariableScope env = null!;
-
-        private string ConfigPath => Path.Combine(directory, "webhop.json");
 
         [SetUp]
         public void SetUp()
         {
-            directory = Path.Combine(Path.GetTempPath(), "webhop-tests-" + Guid.NewGuid().ToString("N"));
             env = new EnvironmentVariableScope()
-                .Set("WEBHOP_URL", null)
+                .Set(HttpCommand.GatewayEnvironmentVariable, null)
                 .Set(Constants.AuthTokenEnvironmentVariable, null);
         }
 
         [TearDown]
-        public void TearDown()
-        {
-            env.Dispose();
-            if (Directory.Exists(directory))
-                Directory.Delete(directory, recursive: true);
-        }
+        public void TearDown() => env.Dispose();
 
         [Test]
         public async Task Without_an_auth_token_it_refuses_to_start()
         {
-            var error = await Assert.ThrowsAsync<CliException>(() => Run("--url", "https://gw.example.com/"));
+            var error = await Assert.ThrowsAsync<CliException>(() => Run("--gateway", "https://gw.example.com/"));
 
             Assert.That(error.Message, Does.StartWith("No auth token."));
         }
@@ -71,27 +62,36 @@ namespace WebHop.Tests.Cli
         }
 
         [Test]
-        public async Task The_gateway_can_come_from_the_config_file()
+        public async Task The_token_flag_wins_over_the_environment()
         {
-            new CliConfig { GatewayUrl = "https://gw.example.com/app/" }.Save(ConfigPath);
+            env.Set(Constants.AuthTokenEnvironmentVariable, TestKeys.Token(audience: ["/api/"]));
 
-            var error = await Assert.ThrowsAsync<CliException>(() => Run("--token", TestKeys.Token()));
+            var error = await Assert.ThrowsAsync<CliException>(() => Run("--token", "s3cr3t-token"));
 
-            // Read it, and refused its path
-            Assert.That(error.Message, Does.Contain("https://gw.example.com/app/").And.Contain("path"));
+            Assert.That(error.Message, Does.Contain("wh_"));
         }
 
         [Test]
         public async Task An_invalid_gateway_from_the_environment_is_rejected()
         {
-            env.Set("WEBHOP_URL", "my-gateway");
+            env.Set(HttpCommand.GatewayEnvironmentVariable, "my-gateway");
 
             var error = await Assert.ThrowsAsync<CliException>(() => Run("--token", TestKeys.Token()));
 
             Assert.That(error.Message, Does.Contain("my-gateway"));
         }
 
-        private Task<int> Run(params string[] flags) =>
-            HttpCommand.RunAsync(HttpOptions.Parse(["8080", "--config", ConfigPath, .. flags])!);
+        [Test]
+        public async Task The_gateway_flag_wins_over_the_environment()
+        {
+            env.Set(HttpCommand.GatewayEnvironmentVariable, "https://gw.example.com/");
+
+            var error = await Assert.ThrowsAsync<CliException>(() => Run("--token", TestKeys.Token(), "--gateway", "https://gw.example.com/app/"));
+
+            Assert.That(error.Message, Does.Contain("https://gw.example.com/app/").And.Contain("path"));
+        }
+
+        private static Task<int> Run(params string[] flags) =>
+            HttpCommand.RunAsync(HttpOptions.Parse(["8080", .. flags])!);
     }
 }

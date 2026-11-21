@@ -52,8 +52,7 @@ namespace WebHop.Tests.Cli
             Assert.That(options.Log, Is.EqualTo(LogTarget.None));
             Assert.That(options.LogLevel, Is.EqualTo(LogLevel.Information));
             Assert.That(options.JsonLogs, Is.False);
-            Assert.That(options.ConfigPath, Is.EqualTo(CliConfig.DefaultPath));
-            Assert.That(options.Url, Is.Null);
+            Assert.That(options.Gateway, Is.Null);
             Assert.That(options.AuthToken, Is.Null);
         }
 
@@ -61,18 +60,17 @@ namespace WebHop.Tests.Cli
         public void All_flags_are_read()
         {
             var options = HttpOptions.Parse([
-                "3000", "--url=https://gw/", "--token", "tok", "--host-header=rewrite",
-                "--connections", "4", "--log-level=warn", "--log-format=json", "--config", "my.json",
+                "3000", "--gateway=https://gw/", "--token", "tok", "--host-header=rewrite",
+                "--connections", "4", "--log-level=warn", "--log-format=json",
             ])!;
 
             Assert.That(options.Target.AbsoluteUri, Is.EqualTo("http://localhost:3000/"));
-            Assert.That(options.Url, Is.EqualTo("https://gw/"));
+            Assert.That(options.Gateway, Is.EqualTo("https://gw/"));
             Assert.That(options.AuthToken, Is.EqualTo("tok"));
             Assert.That(options.HostHeader, Is.EqualTo("rewrite"));
             Assert.That(options.Connections, Is.EqualTo(4));
             Assert.That(options.LogLevel, Is.EqualTo(LogLevel.Warning));
             Assert.That(options.JsonLogs, Is.True);
-            Assert.That(options.ConfigPath, Is.EqualTo("my.json"));
         }
 
         [TestCase("stdout", "Stdout")]

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace WebHop.CLI
 {
@@ -79,4 +80,19 @@ namespace WebHop.CLI
             }
         }
     }
+
+    /// <summary>One --log-format=json line, with ngrok's field names; on one line and keeping a null err.</summary>
+    internal sealed record LogLine(
+        [property: JsonPropertyName("t")] string Time,
+        [property: JsonPropertyName("lvl")] string Level,
+        [property: JsonPropertyName("obj")] string Category,
+        [property: JsonPropertyName("msg")] string Message,
+        [property: JsonPropertyName("err")] string? Error);
+
+    /// <summary>
+    /// Source-generated JSON for <see cref="LogLine"/>: the trimmed and Native AOT builds of webhop disable
+    /// reflection-based serialization.
+    /// </summary>
+    [JsonSerializable(typeof(LogLine))]
+    internal sealed partial class LogLineJsonContext : JsonSerializerContext;
 }
