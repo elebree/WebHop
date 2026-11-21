@@ -19,25 +19,37 @@ Expose a web server behind NAT or a firewall on a public URL, through a gateway 
 
 Everything HTTP passes through: streamed bodies of any size, WebSockets, server-sent events and client disconnects.
 
-- [webhop](WebHop.CLI/README.md): an ngrok-style command line tool that exposes any local HTTP server. Start here if you just want to share a local site.
+- [webhop](WebHop.CLI/README.md): an ngrok-style command line tool that exposes any local HTTP server, and issues the tokens servers open tunnels with. Start here if you just want to share a local site.
 - [WebHop.Origin](WebHop.Origin/README.md): a library that serves your ASP.NET Core app through the gateway, in place of Kestrel's port.
 - [WebHop.Gateway](WebHop.Gateway/README.md): the public gateway, standalone or as middleware in your ASP.NET Core app.
-- [webhop-gen](WebHop.Gen/README.md): issues the token each server opens tunnels with. [WebHop.Core](WebHop.Core/README.md) is the library behind it, and checks tokens for the gateway too.
 
 ## Quick start
 
 Below, `https://gateway.example.com/` stands for your gateway's URL.
 
-### 1. Create the gateway's keys
+### 1. Install `webhop` and create the gateway's keys
 
-Servers open tunnels with a token you issue for each of them, signed with your key. The gateway checks tokens with your public keys only, so it holds no secret that could make one; public visitors need nothing. On your own machine, create a key set for the gateway with `webhop-gen` (or `webhop`, which has the same commands):
+Servers open tunnels with a token you issue for each of them, signed with your key. The gateway checks tokens with your public keys only, so it holds no secret that could make one; public visitors need nothing. On your own machine, install the `webhop` command line tool:
 
 ```sh
-dotnet tool install -g webhop-gen
-webhop-gen issuer init gateway.example.com
+dotnet tool install -g webhop
 ```
 
-It keeps the private key set in your user profile and prints the public set, `whk_…`, for the gateway. [webhop-gen](WebHop.Gen/README.md) is also a standalone binary, for machines where only allowed programs run.
+Or download a standalone binary that runs without .NET:
+
+[![Windows x64](https://img.shields.io/badge/Windows-x64-0078D6)](https://github.com/elebree/WebHop/releases/latest/download/webhop-win-x64.zip)
+[![Windows arm64](https://img.shields.io/badge/Windows-arm64-0078D6)](https://github.com/elebree/WebHop/releases/latest/download/webhop-win-arm64.zip)
+[![Linux x64](https://img.shields.io/badge/Linux-x64-FCC624)](https://github.com/elebree/WebHop/releases/latest/download/webhop-linux-x64.tar.gz)
+[![Linux arm64](https://img.shields.io/badge/Linux-arm64-FCC624)](https://github.com/elebree/WebHop/releases/latest/download/webhop-linux-arm64.tar.gz)
+[![macOS arm64](https://img.shields.io/badge/macOS-arm64-A2AAAD)](https://github.com/elebree/WebHop/releases/latest/download/webhop-osx-arm64.tar.gz)
+
+Then create a key set for the gateway:
+
+```sh
+webhop issuer init gateway.example.com
+```
+
+It keeps the private key set in your user profile and prints the public set, `whk_…`, for the gateway.
 
 ### 2. Deploy the gateway
 
@@ -61,35 +73,21 @@ For **Azure App Service**, follow the [step-by-step guide](WebHop.Gateway.Host/R
 ### 3. Issue a token for your server
 
 ```sh
-webhop-gen token issue gateway.example.com
+webhop token issue gateway.example.com
 ```
 
 It prints the server's token, `wh_…`, valid for 30 days. The token says where the gateway is and what the server serves there, so the server needs nothing else. To serve several sites on one gateway, see [Several sites on one gateway](WebHop.Gateway/README.md#several-sites-on-one-gateway).
 
 ### 4a. Expose any local server with `webhop`
 
-```sh
-dotnet tool install -g webhop
-```
-
-Or download a standalone binary that runs without .NET:
-
-[![Windows x64](https://img.shields.io/badge/Windows-x64-0078D6)](https://github.com/elebree/WebHop/releases/latest/download/webhop-win-x64.zip)
-[![Windows arm64](https://img.shields.io/badge/Windows-arm64-0078D6)](https://github.com/elebree/WebHop/releases/latest/download/webhop-win-arm64.zip)
-[![Linux x64](https://img.shields.io/badge/Linux-x64-FCC624)](https://github.com/elebree/WebHop/releases/latest/download/webhop-linux-x64.tar.gz)
-[![Linux arm64](https://img.shields.io/badge/Linux-arm64-FCC624)](https://github.com/elebree/WebHop/releases/latest/download/webhop-linux-arm64.tar.gz)
-[![macOS arm64](https://img.shields.io/badge/macOS-arm64-A2AAAD)](https://github.com/elebree/WebHop/releases/latest/download/webhop-osx-arm64.tar.gz)
-
-For tunnels that run unattended next to other containers, there's also a [Docker image](WebHop.CLI/README.md#docker).
-
-Save the token and forward a local port:
+Save the token and forward a local port. On another machine, install `webhop` there first, as in step 1.
 
 ```sh
 webhop config add-authtoken <token>
 webhop http 5000
 ```
 
-The site on `localhost:5000` is now public at `https://gateway.example.com/`. All commands and flags: [webhop](WebHop.CLI/README.md).
+The site on `localhost:5000` is now public at `https://gateway.example.com/`. For tunnels that run unattended next to other containers, there's also a [Docker image](WebHop.CLI/README.md#docker). All commands and flags: [webhop](WebHop.CLI/README.md).
 
 ### 4b. Or connect an ASP.NET Core app directly
 
