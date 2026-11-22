@@ -68,7 +68,7 @@ git clone https://github.com/elebree/WebHop.git
 dotnet publish WebHop/WebHop.Gateway.Host -c Release -o gateway
 ```
 
-For **Azure App Service**, follow the [step-by-step guide](WebHop.Gateway.Host/README.md#azure-app-service). To embed the gateway in your own ASP.NET Core app instead, or for reverse proxy and hosting notes, see [WebHop.Gateway](WebHop.Gateway/README.md).
+For **Azure App Service**, follow the [step-by-step guide](WebHop.Gateway.Host/README.md#azure-app-service). For **your own server**, [deploy/traefik](deploy/traefik/README.md) runs it behind Traefik with Docker Compose and a Let's Encrypt certificate, for one host name or a wildcard for every subdomain. To embed the gateway in your own ASP.NET Core app instead, or for reverse proxy and hosting notes, see [WebHop.Gateway](WebHop.Gateway/README.md).
 
 ### 3. Issue a token for your server
 

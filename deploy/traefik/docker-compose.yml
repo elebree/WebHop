@@ -1,0 +1,90 @@
+# The WebHop gateway behind Traefik, on one host name or on every subdomain of a domain, with a
+# Let's Encrypt certificate issued through your DNS host's API. Copy .env.example to .env, fill it
+# in, then:
+#   docker compose up -d
+# Traefik takes ports 80 and 443 itself. Behind another web server, switch in .env to
+# behind-proxy.yml (see README). Needs Docker Compose 2.24.4 or newer.
+services:
+  traefik:
+    image: traefik:v3.7
+    command:
+      - --global.checkNewVersion=false
+      - --global.sendAnonymousUsage=false
+      # Drops headers like X_Forwarded_For, which apps on PHP, CGI and the like would read as
+      # X-Forwarded-For, so visitors can't fake their address to them that way
+      - --global.aliasHeadersStrategy=delete
+      # INFO shows certificates being obtained and renewed
+      - --log.level=INFO
+      - --entryPoints.web.address=:80
+      - --entryPoints.web.http.redirections.entryPoint.to=websecure
+      - --entryPoints.websecure.address=:443
+      - --entryPoints.websecure.http3=true
+      # The default of 60s would cut off uploads to the apps that take longer
+      - --entryPoints.websecure.transport.respondingTimeouts.readTimeout=0
+      # The same site for a web server in front that passes TLS through with PROXY protocol;
+      # behind-proxy.yml publishes it. The client address it sends is believed only from 172.30.0.1,
+      # the gateway of behind-proxy.yml's subnet, through which the published port's connections
+      # arrive. Unpublished, nothing outside this host reaches it.
+      - --entryPoints.proxied.address=:8443
+      - --entryPoints.proxied.proxyProtocol.trustedIPs=172.30.0.1/32
+      - --entryPoints.proxied.transport.respondingTimeouts.readTimeout=0
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --certificatesResolvers.letsencrypt.acme.email=${ACME_EMAIL:-}
+      # With DNS_PROVIDER, the DNS challenge through its API, which *.example.com needs. Without it,
+      # the TLS challenge: Let's Encrypt connects to port 443, so only for one host name.
+      - ${DNS_PROVIDER:+--certificatesResolvers.letsencrypt.acme.dnsChallenge.provider=}${DNS_PROVIDER:---certificatesResolvers.letsencrypt.acme.tlsChallenge=true}
+      # ACME_STAGING switches to Let's Encrypt's staging CA, with its certificates in their own file
+      - --certificatesResolvers.letsencrypt.acme.caServer=https://acme${ACME_STAGING:+-staging}-v02.api.letsencrypt.org/directory
+      - --certificatesResolvers.letsencrypt.acme.storage=/data/acme${ACME_STAGING:+-staging}.json
+    # The DNS host's credentials, whatever their names. Traefik terminates TLS and sees every
+    # request anyway, so the rest of .env tells it nothing new.
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    configs:
+      - source: routes
+        target: /etc/traefik/dynamic.yml
+    volumes:
+      # Certificates and the ACME account; keep this volume so restarts don't request new ones
+      - traefik_data:/data
+    depends_on:
+      - gateway
+    restart: unless-stopped
+
+  gateway:
+    # The newest release; WEBHOP_IMAGE in .env pins another
+    image: ${WEBHOP_IMAGE:-elebree/webhop:latest}
+    # Only the public key set: the DNS credentials in .env stay with Traefik
+    environment:
+      WEBHOP_KEYSET: ${WEBHOP_KEYSET:?Set WEBHOP_KEYSET}
+    # No published port: only Traefik reaches it, over the compose network. The gateway believes
+    # Traefik's X-Forwarded-For/-Proto because Traefik connects from a private address.
+    restart: unless-stopped
+
+volumes:
+  traefik_data:
+
+configs:
+  # WEBHOP_HOST goes to the gateway: one host name, or every subdomain one level below a domain
+  # (*.example.com). The certificate covers exactly that: one that also covered other names would
+  # let browsers reuse this HTTP/2 connection for them and bring them here. Traefik keeps the Host
+  # header, which the gateway picks the app by, and passes WebSocket upgrades.
+  routes:
+    content: |
+      http:
+        routers:
+          webhop:
+            rule: Host(`${WEBHOP_HOST:?Set WEBHOP_HOST}`)
+            entryPoints: [websecure, proxied]
+            service: gateway
+            tls:
+              certResolver: letsencrypt
+              domains:
+                - main: "${WEBHOP_HOST}"
+        services:
+          gateway:
+            loadBalancer:
+              servers:
+                - url: http://gateway:8080

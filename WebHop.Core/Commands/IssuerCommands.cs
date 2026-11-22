@@ -417,9 +417,9 @@ namespace WebHop.Core.Commands
               {tool} token revoke <host|file> --all             revoke every token issued until now
 
             EXAMPLES:
-              {tool} token issue app1.example.com --origin app1
+              {tool} token issue app1.example.com
               {tool} token issue webhop.example.com/api/v1 --lifetime 7d
-              {tool} token issue *.example.com/robots.txt --origin robots
+              {tool} token issue *.example.com/robots.txt
               {tool} token issue app1.example.com app1.example.org --tunnels 5
 
             FLAGS:

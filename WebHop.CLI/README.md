@@ -77,10 +77,10 @@ You create a key set for a gateway once, deploy its public part on the gateway, 
 ```sh
 # A key set for every subdomain of example.com; prints whk_… for the gateway's WEBHOP_KEYSET
 webhop issuer init *.example.com
-# A token for https://app1.example.com/ with the origin id app1; prints wh_… for the server
-webhop token issue app1.example.com --origin app1
+# A token for https://app1.example.com/; prints wh_… for the server
+webhop token issue app1.example.com
 # /robots.txt on every subdomain, from one server
-webhop token issue *.example.com/robots.txt --origin robots
+webhop token issue *.example.com/robots.txt
 # A path on whatever host the server connects to, for a week
 webhop token issue app1.example.com/api/v1 --relative --lifetime 7d
 # The tokens issued from the set, and revoking one; prints the new whk_… to deploy

@@ -72,7 +72,7 @@ internal static class Help
 
             EXAMPLES:
               webhop http 8080 --token <token>
-              webhop token issue app1.example.com --origin app1
+              webhop token issue app1.example.com
 
             Run `webhop help <command>` for details. Version {AppVersion.Current}.
             """);

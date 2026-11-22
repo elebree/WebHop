@@ -59,12 +59,12 @@ The token is sent each time a tunnel opens, and whoever reads it can serve as th
 
 ## Several sites on one gateway
 
-What an app serves is in its token: a URL, a path alone (served on whatever host the app connects to), a host pattern such as `https://*.example.com/robots.txt`, or several of them. Point several names at one gateway (a wildcard DNS record such as `*.gateway.example.com` and a matching certificate), create one key set for all of them, and give each app a token of its own:
+What an app serves is in its token: a URL, a path alone (served on whatever host the app connects to), a host pattern such as `https://*.example.com/robots.txt`, or several of them. Point several names at one gateway (a wildcard DNS record such as `*.gateway.example.com` and a matching certificate, which [deploy/traefik](../deploy/traefik/README.md) gets from Let's Encrypt), create one key set for all of them, and give each app a token of its own:
 
 ```sh
 webhop issuer init *.gateway.example.com
-webhop token issue app1.gateway.example.com --origin app1
-webhop token issue app2.gateway.example.com --origin app2
+webhop token issue app1.gateway.example.com
+webhop token issue app2.gateway.example.com
 ```
 
 Requests for `app1.gateway.example.com` reach only the first app. Names are matched without the port and regardless of case, and paths on segment boundaries: `/drop` serves `/drop` and `/drop/x`, not `/dropbox`. For a request, the app serving the longest path of its host wins, and at equal paths an exact host beats a pattern. So a token for `https://*.gateway.example.com/robots.txt` answers `/robots.txt` on every subdomain, while `https://*.gateway.example.com/` serves the subdomains without an app of their own.
