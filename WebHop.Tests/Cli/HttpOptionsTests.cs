@@ -73,6 +73,29 @@ namespace WebHop.Tests.Cli
             Assert.That(options.JsonLogs, Is.True);
         }
 
+        [Test]
+        public void Url_lifetime_and_set_are_read()
+        {
+            var options = HttpOptions.Parse(["8080", "--url", "app1.example.com/api", "--lifetime=2h", "--set", "ci.json"])!;
+
+            Assert.That(options.Url, Is.EqualTo("app1.example.com/api"));
+            Assert.That(options.Lifetime, Is.EqualTo(TimeSpan.FromHours(2)));
+            Assert.That(options.SetPath, Is.EqualTo(Path.GetFullPath("ci.json")));
+            Assert.That(options.AuthToken, Is.Null);
+        }
+
+        [TestCase("--token", "tok", "not both")]
+        [TestCase("--lifetime", "2h", "--lifetime goes with --url")]
+        [TestCase("--set", "ci.json", "--set goes with --url")]
+        public void Url_is_instead_of_a_token_and_its_flags_need_it(string flag, string value, string message)
+        {
+            var args = flag == "--token" ? new[] { "8080", "--url", "app1.example.com", flag, value } : ["8080", flag, value];
+
+            var error = Assert.Throws<CliException>(() => HttpOptions.Parse(args));
+
+            Assert.That(error.Message, Does.Contain(message));
+        }
+
         [TestCase("stdout", "Stdout")]
         [TestCase("stderr", "Stderr")]
         [TestCase("false", "None")]
@@ -98,6 +121,7 @@ namespace WebHop.Tests.Cli
         [TestCase("8080 --connections 0")]
         [TestCase("8080 --log-level=loud")]
         [TestCase("8080 --log-format=xml")]
+        [TestCase("8080 --url app1.example.com --lifetime 2")]
         public void Invalid_arguments_are_rejected(string commandLine)
         {
             var args = commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);

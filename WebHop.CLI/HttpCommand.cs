@@ -21,9 +21,7 @@ namespace WebHop.CLI
 
         public static async Task<int> RunAsync(HttpOptions options)
         {
-            var authToken = options.AuthToken ?? Environment.GetEnvironmentVariable(Constants.AuthTokenEnvironmentVariable);
-            if (string.IsNullOrWhiteSpace(authToken))
-                throw new CliException($"No auth token. Pass --token or set {Constants.AuthTokenEnvironmentVariable}. The gateway's issuer makes one with `webhop token issue`.");
+            var (authToken, issuedFrom) = ResolveAuthToken(options, IssuerCommands.Create("webhop"));
             if (!OriginToken.TryParse(authToken, out var token, out var problem))
                 throw new CliException($"The auth token can't be used: {problem}.");
 
@@ -104,6 +102,8 @@ namespace WebHop.CLI
 
             var server = (WebHopServer)app.Services.GetRequiredService<IServer>();
             var info = new SessionInfo(server, options.Target);
+            if (issuedFrom is not null)
+                logger.LogInformation("Issued token {Serial} from {KeySet}, valid until {Expires:yyyy-MM-dd HH:mm} UTC", token.Id, issuedFrom, token.Expires.UtcDateTime);
             logger.LogInformation("Forwarding {PublicUrl} -> {Target}", info.PublicUrl, info.Target);
 
             if (interactive)
@@ -119,6 +119,24 @@ namespace WebHop.CLI
             }
 
             return 0;
+        }
+
+        /// <summary>
+        /// The token to connect with: with --url, one issued from this machine's key set, and the set's file; else
+        /// --token or <see cref="Constants.AuthTokenEnvironmentVariable"/>, and no file.
+        /// </summary>
+        internal static (string Token, string? IssuedFrom) ResolveAuthToken(HttpOptions options, IssuerCommands issuer)
+        {
+            if (options.Url is { } url)
+            {
+                var (issued, setPath) = issuer.IssueForUrl(url, options.Lifetime, options.SetPath);
+                return (issued.Value, setPath);
+            }
+
+            var authToken = options.AuthToken ?? Environment.GetEnvironmentVariable(Constants.AuthTokenEnvironmentVariable);
+            if (string.IsNullOrWhiteSpace(authToken))
+                throw new CliException($"No auth token. Pass --token or set {Constants.AuthTokenEnvironmentVariable}; the gateway's issuer makes one with `webhop token issue`. On the issuer's machine, --url <host> issues one itself.");
+            return (authToken, null);
         }
 
         /// <summary>Forwards one request to the local server. Returns why that failed, or null.</summary>

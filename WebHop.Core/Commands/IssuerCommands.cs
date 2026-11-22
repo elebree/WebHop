@@ -163,20 +163,7 @@ namespace WebHop.Core.Commands
         {
             var entries = arguments.Select(Argument).ToList();
 
-            var path = parsed.Get("set");
-            if (path is null)
-            {
-                var hosts = entries.Where(e => !e.IsPath).ToList();
-                if (hosts.Count == 0)
-                    throw new CliException("A path alone doesn't say which key set to use: write it with its host, or pass the set's file with --set.");
-                var picked = hosts.Select(e => (Entry: e, Path: store.Find(e.Value))).ToList();
-                foreach (var (entry, found) in picked)
-                    if (found is null)
-                        throw NoSet(entry.Host!);
-                if (picked.Select(p => p.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
-                    throw new CliException($"The arguments pick different key sets ({string.Join(", ", picked.Select(p => Path.GetFileName(p.Path)).Distinct())}); a token comes from one.");
-                path = picked[0].Path!;
-            }
+            var path = parsed.Get("set") ?? FindSet(entries);
             var set = LoadFile(path);
 
             if (parsed.Flag("relative"))
@@ -190,10 +177,59 @@ namespace WebHop.Core.Commands
             if (parsed.Get("tunnels") is { } t)
                 tunnels = int.TryParse(t, NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n > 0 ? n : throw new CliException("--tunnels needs a positive number.");
 
+            var token = IssueAndLog(path, set, new TokenRequest { Audience = entries, Origin = origin, Lifetime = Duration(parsed, "lifetime"), Tunnels = tunnels });
+
+            error.WriteLine($"Origin {token.Subject} serving {string.Join(", ", token.Audience)} until {Time(token.Expires)} (serial {token.Id}):");
+            output.WriteLine(token.Value);
+            return 0;
+        }
+
+        /// <summary>How long a token issued for <c>http --url</c> is valid unless --lifetime says otherwise, or the set's lifetime when that's shorter.</summary>
+        public static readonly TimeSpan UrlTokenLifetime = TimeSpan.FromDays(1);
+
+        /// <summary>
+        /// For <c>http --url</c>: a token serving <paramref name="url"/>, from the set file <paramref name="setPath"/> or
+        /// else the set on this machine that covers its host, valid for <paramref name="lifetime"/> or
+        /// <see cref="UrlTokenLifetime"/>. Logged like any other, so <c>token list</c> and <c>token revoke --origin</c>
+        /// find it; its serial is its origin id.
+        /// </summary>
+        public (OriginToken Token, string SetPath) IssueForUrl(string url, TimeSpan? lifetime, string? setPath = null)
+        {
+            var entry = Argument(url);
+            if (entry.IsPath)
+                throw new CliException($"--url needs a host, such as app1.example.com, not a path alone: its host picks the key set and the gateway.");
+
+            var path = setPath ?? FindSet([entry]);
+            var set = LoadFile(path);
+            var token = IssueAndLog(path, set, new TokenRequest
+            {
+                Audience = [entry],
+                Lifetime = lifetime ?? (set.Lifetime < UrlTokenLifetime ? set.Lifetime : UrlTokenLifetime),
+            });
+            return (token, path);
+        }
+
+        /// <summary>The one set that covers the hosts of <paramref name="entries"/>; paths alone pick none.</summary>
+        private string FindSet(IReadOnlyList<AudienceEntry> entries)
+        {
+            var hosts = entries.Where(e => !e.IsPath).ToList();
+            if (hosts.Count == 0)
+                throw new CliException("A path alone doesn't say which key set to use: write it with its host, or pass the set's file with --set.");
+            var picked = hosts.Select(e => (Entry: e, Path: store.Find(e.Value))).ToList();
+            foreach (var (entry, found) in picked)
+                if (found is null)
+                    throw NoSet(entry.Host!);
+            if (picked.Select(p => p.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+                throw new CliException($"The arguments pick different key sets ({string.Join(", ", picked.Select(p => Path.GetFileName(p.Path)).Distinct())}); a token comes from one.");
+            return picked[0].Path!;
+        }
+
+        private OriginToken IssueAndLog(string path, KeySet set, TokenRequest request)
+        {
             OriginToken token;
             try
             {
-                token = set.Issue(new TokenRequest { Audience = entries, Origin = origin, Lifetime = Duration(parsed, "lifetime"), Tunnels = tunnels }, clock());
+                token = set.Issue(request, clock());
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
             {
@@ -209,9 +245,7 @@ namespace WebHop.Core.Commands
                 throw new CliException($"Cannot write the log beside {path}: {ex.Message}");
             }
 
-            error.WriteLine($"Origin {token.Subject} serving {string.Join(", ", token.Audience)} until {Time(token.Expires)} (serial {token.Id}):");
-            output.WriteLine(token.Value);
-            return 0;
+            return token;
         }
 
         private int ListTokens(string argument, CliArgs parsed)

@@ -91,6 +91,31 @@ namespace WebHop.Tests.Cli
             Assert.That(error.Message, Does.Contain("https://gw.example.com/app/").And.Contain("path"));
         }
 
+        [Test]
+        public void A_url_issues_the_token_from_the_key_set_instead_of_the_environment()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "webhop-tests-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var issuer = new IssuerCommands("webhop", new KeySetStore(directory), TextWriter.Null, TextWriter.Null, () => DateTimeOffset.UtcNow);
+                issuer.RunIssuer(["init", "*.example.com"]);
+                env.Set(Constants.AuthTokenEnvironmentVariable, TestKeys.Token());
+
+                var (token, issuedFrom) = HttpCommand.ResolveAuthToken(HttpOptions.Parse(["8080", "--url", "app1.example.com"])!, issuer);
+
+                using (Assert.EnterMultipleScope())
+                {
+                    Assert.That(OriginToken.Parse(token).Audience.Single().Value, Is.EqualTo("https://app1.example.com/"));
+                    Assert.That(issuedFrom, Is.EqualTo(Path.Combine(directory, "_.example.com.json")));
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                    Directory.Delete(directory, recursive: true);
+            }
+        }
+
         private static Task<int> Run(params string[] flags) =>
             HttpCommand.RunAsync(HttpOptions.Parse(["8080", .. flags])!);
     }

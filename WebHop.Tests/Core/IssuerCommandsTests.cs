@@ -148,6 +148,62 @@ namespace WebHop.Tests.Core
         }
 
         [Test]
+        public void IssueForUrl_finds_the_set_issues_a_day_long_token_for_the_url_and_logs_it()
+        {
+            Issuer("init", "*.example.com");
+            var set = KeySet.Parse(output.ToString());
+
+            var (token, path) = Commands().IssueForUrl("app1.example.com/api/", lifetime: null);
+
+            var validation = new TokenValidator(set).Validate(token.Value);
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(path, Is.EqualTo(SetPath));
+                Assert.That(token.Audience.Single().Value, Is.EqualTo("https://app1.example.com/api/"));
+                Assert.That(token.Subject, Is.EqualTo(token.Id));
+                Assert.That(token.Expires - token.IssuedAt, Is.EqualTo(IssuerCommands.UrlTokenLifetime));
+                Assert.That(validation.IsValid, Is.True, validation.Failure);
+                Assert.That(KeySetStore.ReadLog(SetPath).Single().Id, Is.EqualTo(token.Id));
+                Assert.That(output.ToString() + error.ToString(), Is.Empty);
+            }
+        }
+
+        [Test]
+        public void IssueForUrl_takes_a_lifetime_and_otherwise_keeps_to_a_shorter_one_of_the_set()
+        {
+            Issuer("init", "*.example.com", "--lifetime", "2h");
+
+            var (defaulted, _) = Commands().IssueForUrl("app1.example.com", lifetime: null);
+            var (given, _) = Commands().IssueForUrl("app1.example.com", TimeSpan.FromMinutes(30));
+
+            Assert.That(defaulted.Expires - defaulted.IssuedAt, Is.EqualTo(TimeSpan.FromHours(2)));
+            Assert.That(given.Expires - given.IssuedAt, Is.EqualTo(TimeSpan.FromMinutes(30)));
+        }
+
+        [Test]
+        public void IssueForUrl_takes_a_set_file()
+        {
+            var file = Path.Combine(directory, "elsewhere", "ci.json");
+            Issuer("init", "*.example.com", "--set", file);
+
+            var (_, path) = Commands().IssueForUrl("app1.example.com", lifetime: null, file);
+
+            Assert.That(path, Is.EqualTo(file));
+            Assert.That(KeySetStore.ReadLog(file), Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void IssueForUrl_needs_a_host_with_a_set_that_allows_it()
+        {
+            Issuer("init", "*.example.com", "--max-lifetime", "7d");
+
+            Assert.That(Assert.Throws<CliException>(() => Commands().IssueForUrl("/api/", null)).Message, Does.Contain("needs a host"));
+            Assert.That(Assert.Throws<CliException>(() => Commands().IssueForUrl("example.org", null)).Message, Does.Contain("No key set"));
+            Assert.That(Assert.Throws<CliException>(() => Commands().IssueForUrl("app1.example.com", TimeSpan.FromDays(8))).Message, Does.Contain("maxLifetime"));
+            Assert.That(File.Exists(KeySetStore.LogPath(SetPath)), Is.False);
+        }
+
+        [Test]
         public void A_set_file_can_be_passed_instead()
         {
             var file = Path.Combine(directory, "elsewhere", "ci.json");

@@ -86,7 +86,7 @@ Forward a local port with the token. On another machine, install `webhop` there 
 webhop http 5000 --token <token>
 ```
 
-The site on `localhost:5000` is now public at `https://gateway.example.com/`. For tunnels that run unattended next to other containers, there's also a [Docker image](WebHop.CLI/README.md#docker). All commands and flags: [webhop](WebHop.CLI/README.md).
+The site on `localhost:5000` is now public at `https://gateway.example.com/`. On the machine with the key set, you can skip step 3: `webhop http 5000 --url gateway.example.com` issues a token valid for a day itself. For tunnels that run unattended next to other containers, there's also a [Docker image](WebHop.CLI/README.md#docker). All commands and flags: [webhop](WebHop.CLI/README.md).
 
 ### 4b. Or connect an ASP.NET Core app directly
 

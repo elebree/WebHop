@@ -28,6 +28,14 @@ webhop http 5000 --token <token>
 
 The token, `wh_…`, says where the gateway is, what this tunnel serves there and its origin id, so that's all `webhop` needs. Instead of `--token`, it can come from the `WEBHOP_TOKEN` environment variable. Whoever issues tokens for the gateway makes one with `webhop token issue`; see [Issuing tokens](#issuing-tokens).
 
+On the machine that holds the gateway's key set, `webhop` can issue a short-lived token itself:
+
+```sh
+webhop http 5000 --url app1.example.com
+```
+
+It picks the key set that covers the host, as `token issue` does, and issues a token serving that URL for a day, or the set's lifetime if that's shorter. The token is logged beside the set like any other. When it expires, the gateway closes the tunnels; run the command again for a new one.
+
 ```
 WebHop                                                (Ctrl+C to quit)
 
@@ -61,6 +69,9 @@ The commands and flags follow ngrok's.
 | Flag for `webhop http` | Meaning |
 |---|---|
 | `--token` | The token. Default: `WEBHOP_TOKEN` |
+| `--url` | Instead of `--token`: issue a token for this host or URL from the key set on this machine that covers it (WebHop-specific) |
+| `--lifetime` | With `--url`: how long its token is valid, such as `2h`. Default: a day, or the set's lifetime if shorter |
+| `--set` | With `--url`: the key set's file, instead of finding it by host |
 | `--gateway` | The gateway's scheme, host and port, instead of the token's; a token that serves paths alone needs it. Default: `WEBHOP_GATEWAY` |
 | `--host-header` | Host header sent to the local server. `rewrite` sends the target's own, such as `localhost:5000`, for dev servers that reject other hosts (Vite, webpack dev server); any other value is sent as is. Default: the public host |
 | `--log=stdout\|stderr\|<file>` | `stdout`/`stderr` print log lines instead of the live screen (also used when output is redirected); a file path keeps the screen and writes the log to the file |

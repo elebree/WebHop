@@ -1,3 +1,5 @@
+using WebHop.Core;
+
 namespace WebHop.CLI
 {
     internal enum LogTarget { None, Stdout, Stderr, File }
@@ -5,13 +7,22 @@ namespace WebHop.CLI
     internal sealed class HttpOptions
     {
         private static readonly HashSet<string> ValueFlags =
-            ["gateway", "token", "host-header", "connections", "log", "log-level", "log-format"];
+            ["gateway", "token", "url", "lifetime", "set", "host-header", "connections", "log", "log-level", "log-format"];
 
         private static readonly HashSet<string> BoolFlags = ["help"];
 
         public required Uri Target { get; init; }
         public string? Gateway { get; init; }
         public string? AuthToken { get; init; }
+
+        /// <summary>--url: issue the token for this host or URL from this machine's key set, instead of --token.</summary>
+        public string? Url { get; init; }
+
+        /// <summary>--lifetime, with --url: how long its token is valid.</summary>
+        public TimeSpan? Lifetime { get; init; }
+
+        /// <summary>--set, with --url: the key set's file, instead of finding it by host.</summary>
+        public string? SetPath { get; init; }
         public string? HostHeader { get; init; }
         public int? Connections { get; init; }
         public LogTarget Log { get; init; }
@@ -33,12 +44,23 @@ namespace WebHop.CLI
                 _ => throw new CliException($"Unexpected argument {parsed.Positional[1]}."),
             };
 
+            var url = parsed.Get("url");
+            if (url is not null && parsed.Get("token") is not null)
+                throw new CliException("Pass --url or --token, not both: --url issues its own token.");
+            if (url is null && (parsed.Get("lifetime") ?? parsed.Get("set")) is not null)
+                throw new CliException($"--{(parsed.Get("lifetime") is null ? "set" : "lifetime")} goes with --url, which issues the token here.");
+
             var log = parsed.Get("log");
             return new HttpOptions
             {
                 Target = ParseTarget(target),
                 Gateway = parsed.Get("gateway"),
                 AuthToken = parsed.Get("token"),
+                Url = url,
+                Lifetime = parsed.Get("lifetime") is { } lifetime
+                    ? Durations.TryParse(lifetime, out var duration) ? duration : throw new CliException($"--lifetime takes a number and a unit, such as 30m, 12h or 7d, not `{lifetime}`.")
+                    : null,
+                SetPath = parsed.Get("set") is { } set ? Path.GetFullPath(set) : null,
                 HostHeader = parsed.Get("host-header"),
                 Connections = parsed.Get("connections") is { } c
                     ? int.TryParse(c, out var n) && n > 0 ? n : throw new CliException("--connections needs a positive number.")

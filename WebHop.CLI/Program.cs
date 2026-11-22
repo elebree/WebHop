@@ -27,7 +27,7 @@ catch (CliException ex)
 // Like ngrok, flags may come before the command (webhop --log stdout http 8080)
 static string[] CommandFirst(string[] args)
 {
-    string[] valueFlags = ["gateway", "token", "host-header", "connections", "log", "log-level", "log-format", .. IssuerCommands.ValueFlags];
+    string[] valueFlags = ["gateway", "token", "url", "host-header", "connections", "log", "log-level", "log-format", .. IssuerCommands.ValueFlags];
     for (var i = 0; i < args.Length; i++)
     {
         var arg = args[i];
@@ -91,6 +91,7 @@ internal static class Help
             EXAMPLES:
               webhop http 8080 --token=<token>             forward to http://localhost:8080
               webhop http 8080                             the same, with the token in {Constants.AuthTokenEnvironmentVariable}
+              webhop http 8080 --url=app1.example.com      issue a token for it from this machine's key set
               webhop http app.local:80                     forward to another host on your network
               webhop http https://localhost:7001           forward to a local https server (self-signed is fine)
               webhop http 3000 --host-header=rewrite       send Host: localhost:3000 (Vite, webpack dev server)
@@ -99,6 +100,11 @@ internal static class Help
 
             FLAGS:
               --token string         the origin's token, wh_… (default: {Constants.AuthTokenEnvironmentVariable})
+              --url string           instead of --token: issue a token for this host or URL from the
+                                     key set on this machine that covers it (see `webhop help issuer`)
+              --lifetime duration    with --url: how long its token is valid, such as 2h; the tunnel
+                                     stops then (default {Durations.Format(IssuerCommands.UrlTokenLifetime)}, or the set's lifetime if shorter)
+              --set string           with --url: the key set's file, instead of finding it by host
               --gateway string       the gateway's scheme, host and port, instead of the token's
                                      (default: {HttpCommand.GatewayEnvironmentVariable})
               --host-header string   Host header sent to the local server: `rewrite` for the
