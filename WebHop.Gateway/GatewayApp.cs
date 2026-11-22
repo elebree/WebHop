@@ -12,6 +12,7 @@ namespace WebHop.Gateway
         /// middleware. Use it for things that must run first, such as branded status-code pages or
         /// static files — host concerns that stay out of the reusable middleware package.
         /// </param>
+        /// <exception cref="GatewayConfigurationException">There's no key set, or it can't be used.</exception>
         public static WebApplication Create(string[] args, Action<WebApplication>? configure = null)
         {
             var builder = WebApplication.CreateBuilder(args);
@@ -34,24 +35,32 @@ namespace WebHop.Gateway
                 builder.Services.Configure<ForwardedHeadersOptions>(TrustedProxies.Configure);
 
             var app = builder.Build();
-
-            // First, so everything after sees the client the proxy named
-            if (!trustEveryone)
-                app.UseForwardedHeaders();
-
-            configure?.Invoke(app);
-
-            app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(15) });
-            app.UseWebHopGateway();
-
-            // A standalone gateway has no local content, so an unforwarded request means no server is connected
-            app.Run(context =>
+            try
             {
-                context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-                return Task.CompletedTask;
-            });
+                // First, so everything after sees the client the proxy named
+                if (!trustEveryone)
+                    app.UseForwardedHeaders();
 
-            return app;
+                configure?.Invoke(app);
+
+                app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(15) });
+                app.UseWebHopGateway();
+
+                // A standalone gateway has no local content, so an unforwarded request means no server is connected
+                app.Run(context =>
+                {
+                    context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                    return Task.CompletedTask;
+                });
+
+                return app;
+            }
+            catch
+            {
+                // Such as a missing key set: nobody gets the app to dispose, so release its services here
+                ((IDisposable)app).Dispose();
+                throw;
+            }
         }
     }
 }

@@ -49,7 +49,7 @@ webhop issuer init gateway.example.com     # prints whk_… for the gateway
 webhop token issue gateway.example.com     # prints wh_… for an app
 ```
 
-Set the public set with the `WEBHOP_KEYSET` environment variable or the `WebHop:KeySet` configuration key (the setting wins when both are set). In `appsettings.json` it can also be the set's JSON, as a nested object. Without a set, or with one it can't use, the gateway still starts, but rejects every tunnel and logs an error. It refuses a set with a private key.
+Set the public set with the `WEBHOP_KEYSET` environment variable or the `WebHop:KeySet` configuration key (the setting wins when both are set). In `appsettings.json` it can also be the set's JSON, as a nested object. Without a set, or with one it can't use, the gateway doesn't start: `GatewayApp.Create` and `UseWebHopGateway` throw a `GatewayConfigurationException` that says what to fix. It refuses a set with a private key.
 
 Besides the keys, the set holds the issuer's limits on this gateway: `allow` lists the hosts and paths tokens may claim, `maxLifetime` caps how long a token may be valid, and `deny` and `issuedAfter` revoke tokens. The gateway reads the set at startup, so revoking a token (`webhop token revoke <token>`) means deploying the new set it prints. A tunnel lives no longer than its token: the gateway closes it when the token expires.
 

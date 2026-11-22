@@ -1,6 +1,5 @@
-using System.Net;
 using WebHop.Core;
-using WebHop.Origin;
+using WebHop.Gateway;
 using WebHop.Tests.Infrastructure;
 
 namespace WebHop.Tests.Integration
@@ -10,27 +9,23 @@ namespace WebHop.Tests.Integration
     public class GatewayWithoutKeysTests
     {
         [Test]
-        public async Task A_gateway_without_a_key_set_starts_but_accepts_no_tunnels()
+        public async Task A_gateway_without_a_key_set_does_not_start()
         {
             using var env = new EnvironmentVariableScope().Set(Constants.KeySetEnvironmentVariable, null);
-            await using var gateway = await TestGateway.StartWithSettingAsync(keySetSetting: null);
-            await using var app = await TunnelApp.StartAsync(gateway);
 
-            Assert.That(await gateway.Client.GetStringAsync("/webhop/status"), Is.EqualTo("WebHop Gateway status"));
-            await Eventually.TrueAsync(() => app.Server.Status.State == WebHopConnectionState.Unauthorized, "app reports unauthorized");
-            using var response = await gateway.Client.GetAsync("/ping");
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.ServiceUnavailable));
+            var ex = await Assert.ThrowsAsync<GatewayConfigurationException>(() => TestGateway.StartWithSettingAsync(keySetSetting: null));
+
+            Assert.That(ex!.Message, Does.Contain(Constants.KeySetEnvironmentVariable));
         }
 
         [Test]
-        public async Task A_gateway_with_a_private_set_accepts_no_tunnels()
+        public async Task A_gateway_with_a_private_set_does_not_start()
         {
             using var env = new EnvironmentVariableScope().Set(Constants.KeySetEnvironmentVariable, null);
-            await using var gateway = await TestGateway.StartWithSettingAsync(TestKeys.Set.ToJson());
-            await using var app = await TunnelApp.StartAsync(gateway);
 
-            await Eventually.TrueAsync(() => app.Server.Status.State == WebHopConnectionState.Unauthorized, "app reports unauthorized");
-            Assert.That(gateway.Registry.OriginCount, Is.Zero);
+            var ex = await Assert.ThrowsAsync<GatewayConfigurationException>(() => TestGateway.StartWithSettingAsync(TestKeys.Set.ToJson()));
+
+            Assert.That(ex!.Message, Does.Contain("private key"));
         }
 
         [Test]

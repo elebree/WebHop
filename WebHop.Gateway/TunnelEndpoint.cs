@@ -35,14 +35,6 @@ namespace WebHop.Gateway
                 return;
             }
 
-            if (!authorization.IsConfigured)
-            {
-                // Nothing to guess without a key set: every tunnel is turned away, and that's logged at startup
-                logger.LogWarning("Rejected tunnel from {RemoteIp}: the gateway has no key set", remoteIp);
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                return;
-            }
-
             // The token itself. Refusals name the origin and serial it claims, never the token.
             var validation = authorization.Validate(TunnelAuthorization.TokenFromRequest(context));
             if (validation is not { IsValid: true, Token: { } token })

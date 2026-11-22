@@ -14,6 +14,7 @@ namespace Microsoft.AspNetCore.Builder
         /// it falls through to the next middleware, so a host can serve its own content (or end the pipeline
         /// with a 503). Call <c>AddWebHopGateway()</c> first and <c>UseWebSockets()</c> before this.
         /// </summary>
+        /// <exception cref="GatewayConfigurationException">There's no key set, or it can't be used.</exception>
         public static IApplicationBuilder UseWebHopGateway(this IApplicationBuilder app)
         {
             var services = app.ApplicationServices;
@@ -23,15 +24,10 @@ namespace Microsoft.AspNetCore.Builder
             var tunnelClient = services.GetRequiredService<GatewayTunnelClient>();
             var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(GatewayApplicationBuilderExtensions).Namespace!);
 
-            if (authorization.Error is { } error)
-                logger.LogError("Cannot use the key set: {Error} The gateway accepts no tunnels until it's fixed", error.TrimEnd('.') + ".");
-            else if (authorization.Keys is not { } keys)
-                logger.LogError("No key set: set {Variable} or the {Setting} setting to the public set from `webhop issuer public`. The gateway accepts no tunnels until then",
-                    Constants.KeySetEnvironmentVariable, Constants.KeySetSetting);
-            else
-                // Nobody can read the encoded form, so say what was loaded
-                logger.LogInformation("Accepting tunnels at {Endpoint} with tokens of issuer {Issuer}, keys {Keys}, serving within {Allow}",
-                    keys.Endpoint, keys.Issuer, string.Join(", ", keys.Keys.Select(k => k.KeyId)), string.Join(", ", keys.Allow));
+            // Nobody can read the encoded form, so say what was loaded
+            var keys = authorization.Keys;
+            logger.LogInformation("Accepting tunnels at {Endpoint} with tokens of issuer {Issuer}, keys {Keys}, serving within {Allow}",
+                keys.Endpoint, keys.Issuer, string.Join(", ", keys.Keys.Select(k => k.KeyId)), string.Join(", ", keys.Allow));
 
             // How many tunnels one origin may keep open, from the host's WebSocket budget (0 = unlimited)
             var maxConnectionsPerOrigin = WebSocketBudget.PerOriginCap(services.GetRequiredService<IConfiguration>());

@@ -20,14 +20,11 @@ namespace WebHop.Tests.Gateway
         public void TearDown() => env.Dispose();
 
         [Test]
-        public void Without_a_key_set_no_tunnel_is_accepted()
+        public void A_missing_set_is_refused_naming_where_to_set_it()
         {
-            var authorization = Create();
+            var ex = Assert.Throws<GatewayConfigurationException>(() => Create());
 
-            Assert.That(authorization.IsConfigured, Is.False);
-            Assert.That(authorization.Error, Is.Null);
-            Assert.That(authorization.Endpoint, Is.EqualTo(Constants.DefaultWebHopEndpoint));
-            Assert.That(authorization.Validate(TestKeys.Token()).IsValid, Is.False);
+            Assert.That(ex.Message, Does.Contain(Constants.KeySetEnvironmentVariable).And.Contain(Constants.KeySetSetting));
         }
 
         [Test]
@@ -35,14 +32,14 @@ namespace WebHop.Tests.Gateway
         {
             var authorization = Create(TestKeys.Set.Encode());
 
-            Assert.That(authorization.IsConfigured, Is.True);
+            Assert.That(authorization.Endpoint, Is.EqualTo(Constants.DefaultWebHopEndpoint));
             Assert.That(authorization.Validate(TestKeys.Token()).IsValid, Is.True);
         }
 
         [Test]
         public void The_set_can_be_json()
         {
-            Assert.That(Create(TestKeys.Set.ToPublicJson(indented: true)).Keys!.Issuer, Is.EqualTo(TestKeys.Set.Issuer));
+            Assert.That(Create(TestKeys.Set.ToPublicJson(indented: true)).Keys.Issuer, Is.EqualTo(TestKeys.Set.Issuer));
         }
 
         [Test]
@@ -53,8 +50,7 @@ namespace WebHop.Tests.Gateway
 
             var authorization = new TunnelAuthorization(configuration);
 
-            Assert.That(authorization.Error, Is.Null);
-            Assert.That(authorization.Keys!.Allow, Is.EqualTo(TestKeys.Set.Allow));
+            Assert.That(authorization.Keys.Allow, Is.EqualTo(TestKeys.Set.Allow));
             Assert.That(authorization.Keys.MaxLifetime, Is.EqualTo(TestKeys.Set.MaxLifetime));
             Assert.That(authorization.Validate(TestKeys.Token()).IsValid, Is.True);
         }
@@ -64,7 +60,7 @@ namespace WebHop.Tests.Gateway
         {
             env.Set(Constants.KeySetEnvironmentVariable, TestKeys.Set.Encode());
 
-            Assert.That(Create().Keys!.Issuer, Is.EqualTo(TestKeys.Set.Issuer));
+            Assert.That(Create().Keys.Issuer, Is.EqualTo(TestKeys.Set.Issuer));
         }
 
         [Test]
@@ -73,7 +69,7 @@ namespace WebHop.Tests.Gateway
             var other = KeySet.Create([AudienceEntry.Parse("/")]);
             env.Set(Constants.KeySetEnvironmentVariable, other.Encode());
 
-            Assert.That(Create(TestKeys.Set.Encode()).Keys!.Issuer, Is.EqualTo(TestKeys.Set.Issuer));
+            Assert.That(Create(TestKeys.Set.Encode()).Keys.Issuer, Is.EqualTo(TestKeys.Set.Issuer));
         }
 
         [Test]
@@ -87,19 +83,17 @@ namespace WebHop.Tests.Gateway
         [Test]
         public void A_private_set_is_refused_with_a_clear_error()
         {
-            var authorization = Create(TestKeys.Set.ToJson());
+            var ex = Assert.Throws<GatewayConfigurationException>(() => Create(TestKeys.Set.ToJson()));
 
-            Assert.That(authorization.IsConfigured, Is.False);
-            Assert.That(authorization.Error, Does.Contain("private key"));
+            Assert.That(ex.Message, Does.Contain("private key"));
         }
 
         [Test]
         public void A_token_pasted_as_the_set_is_refused_with_a_clear_error()
         {
-            var authorization = Create(TestKeys.Token());
+            var ex = Assert.Throws<GatewayConfigurationException>(() => Create(TestKeys.Token()));
 
-            Assert.That(authorization.IsConfigured, Is.False);
-            Assert.That(authorization.Error, Does.Contain("origin's token").And.Contain(Constants.KeySetSetting));
+            Assert.That(ex.Message, Does.Contain("origin's token").And.Contain(Constants.KeySetSetting));
         }
 
         [Test]

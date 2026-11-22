@@ -9,46 +9,30 @@ namespace WebHop.Gateway
     /// Checks the tokens origins present when opening a tunnel (<c>Authorization: Bearer wh_…</c>, or the
     /// <c>webhop.token.</c> subprotocol from browsers), with the issuer's public key set from the
     /// <c>WebHop:KeySet</c> setting or the <c>WEBHOP_KEYSET</c> environment variable. The gateway holds no secret
-    /// that could make a token. Only tunnel registration is protected; public traffic stays open. Without a
-    /// usable set the gateway still starts, but accepts no tunnels at all.
+    /// that could make a token. Only tunnel registration is protected; public traffic stays open.
     /// </summary>
     public sealed class TunnelAuthorization
     {
-        private readonly TokenValidator? validator;
+        private readonly TokenValidator validator;
 
+        /// <exception cref="GatewayConfigurationException">No set is configured, or it can't be used.</exception>
         public TunnelAuthorization(IConfiguration configuration)
         {
-            try
-            {
-                Keys = ReadKeys(configuration);
-                if (Keys is not null)
-                    validator = new TokenValidator(Keys);
-            }
-            catch (FormatException ex)
-            {
-                Keys = null;
-                Error = ex.Message;
-            }
+            Keys = ReadKeys(configuration);
+            validator = new TokenValidator(Keys);
         }
 
-        /// <summary>The public key set, when one is configured and usable.</summary>
-        public KeySet? Keys { get; }
-
-        /// <summary>Why the configured set can't be used; null when it can, or when none is configured.</summary>
-        public string? Error { get; }
-
-        public bool IsConfigured => validator is not null;
+        /// <summary>The issuer's public key set.</summary>
+        public KeySet Keys { get; }
 
         /// <summary>Where origins open tunnels: the set's <c>ept</c>, or <see cref="Constants.DefaultWebHopEndpoint"/>.</summary>
-        public string Endpoint => Keys?.Endpoint ?? Constants.DefaultWebHopEndpoint;
+        public string Endpoint => Keys.Endpoint;
 
         /// <summary>Checks the token itself: a failure means 401.</summary>
-        public TokenValidation Validate(string? token) =>
-            validator?.Validate(token) ?? new TokenValidation(null, "the gateway has no key set");
+        public TokenValidation Validate(string? token) => validator.Validate(token);
 
         /// <summary>Whether a valid token may serve on the tunnel's host; why not, or null. A refusal means 403.</summary>
-        public string? CheckHost(OriginToken token, string host) =>
-            validator is null ? "the gateway has no key set" : validator.CheckHost(token, host);
+        public string? CheckHost(OriginToken token, string host) => validator.CheckHost(token, host);
 
         /// <summary>The token from <c>Authorization: Bearer</c>, else from a <c>webhop.token.</c> subprotocol; null if neither.</summary>
         public static string? TokenFromRequest(HttpContext context)
@@ -71,10 +55,10 @@ namespace WebHop.Gateway
 
         /// <summary>
         /// The set from the setting (a string, or a nested object in appsettings.json), else from the environment
-        /// variable; null when neither is set.
+        /// variable.
         /// </summary>
-        /// <exception cref="FormatException">It's set but not a public key set, with a message that says why.</exception>
-        internal static KeySet? ReadKeys(IConfiguration configuration)
+        /// <exception cref="GatewayConfigurationException">Neither is set, or it's not a public key set; the message says why.</exception>
+        private static KeySet ReadKeys(IConfiguration configuration)
         {
             var section = configuration.GetSection(Constants.KeySetSetting);
             var text = section.Value;
@@ -87,7 +71,8 @@ namespace WebHop.Gateway
                 source = Constants.KeySetEnvironmentVariable;
             }
             if (string.IsNullOrWhiteSpace(text))
-                return null;
+                throw new GatewayConfigurationException(
+                    $"No key set: set {Constants.KeySetEnvironmentVariable} or the {Constants.KeySetSetting} setting to the public set from `webhop issuer public`.");
 
             KeySet set;
             try
@@ -96,12 +81,12 @@ namespace WebHop.Gateway
             }
             catch (FormatException ex)
             {
-                throw new FormatException($"{source} is not a public key set: {ex.Message}");
+                throw new GatewayConfigurationException($"{source} is not a public key set: {ex.Message.TrimEnd('.')}.");
             }
 
             // Whoever holds a private key can issue tokens: it stays with the issuer
             if (set.IsPrivate)
-                throw new FormatException($"{source} holds a private key (d). Deploy the public set that `webhop issuer public` prints; the private one stays with the issuer.");
+                throw new GatewayConfigurationException($"{source} holds a private key (d). Deploy the public set that `webhop issuer public` prints; the private one stays with the issuer.");
             return set;
         }
 

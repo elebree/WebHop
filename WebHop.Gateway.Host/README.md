@@ -9,7 +9,7 @@ The ready-to-deploy [WebHop](../README.md) gateway. It runs the standalone gatew
 
 | Setting | Meaning |
 |---|---|
-| `WEBHOP_KEYSET` or `WebHop:KeySet` | The public key set, `whk_…`, that `webhop issuer init` prints. Servers open tunnels with tokens signed by its keys. Without it the gateway starts but rejects every tunnel and logs an error. The setting wins when both are set; in `appsettings.json` it can also be the set's JSON |
+| `WEBHOP_KEYSET` or `WebHop:KeySet` | The public key set, `whk_…`, that `webhop issuer init` prints. Servers open tunnels with tokens signed by its keys. Without it, or with one it can't use, the gateway prints why and exits with code 1. The setting wins when both are set; in `appsettings.json` it can also be the set's JSON |
 | `WebHop:MaxWebSockets` | The host's WebSocket limit, if Azure's plan detection doesn't fit; the gateway lets each server open 60% of it |
 | `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` | Only for a reverse proxy that connects from a public address (a CDN). It believes `X-Forwarded-For` and `X-Forwarded-Proto` from every client, so then nothing but the proxy may reach the gateway. A proxy on the same host or a private network is believed without it |
 
@@ -112,4 +112,4 @@ The gateway listens on https://localhost:7188 and http://localhost:5075. A token
 
 ## Customizing
 
-[Program.cs](Program.cs) is one line: `GatewayApp.Create(args, app => app.UseWebHopErrorPages()).Run()`. The callback runs before the gateway's middleware, so it's the place for further host-level additions. To serve your own content next to the gateway instead, embed the middleware in your own app; see [WebHop.Gateway](../WebHop.Gateway/README.md#in-an-existing-app).
+[Program.cs](Program.cs) runs `GatewayApp.Create(args, app => app.UseWebHopErrorPages())` and exits with an error when the key set is missing or unusable. The callback runs before the gateway's middleware, so it's the place for further host-level additions. To serve your own content next to the gateway instead, embed the middleware in your own app; see [WebHop.Gateway](../WebHop.Gateway/README.md#in-an-existing-app).
