@@ -21,8 +21,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WebHop.Tests", "WebHop.Test
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WebHop.Gateway.Host", "WebHop.Gateway.Host\WebHop.Gateway.Host.csproj", "{5BFD8003-4651-48BB-BBA9-35B6529ADF94}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WebHop.Gen", "WebHop.Gen\WebHop.Gen.csproj", "{6B428DB5-8B9B-48FA-8777-0C8D9A550E5C}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -105,18 +103,6 @@ Global
 		{5BFD8003-4651-48BB-BBA9-35B6529ADF94}.Release|x64.Build.0 = Release|Any CPU
 		{5BFD8003-4651-48BB-BBA9-35B6529ADF94}.Release|x86.ActiveCfg = Release|Any CPU
 		{5BFD8003-4651-48BB-BBA9-35B6529ADF94}.Release|x86.Build.0 = Release|Any CPU
-		{6B428DB5-8B9B-48FA-8777-0C8D9A550E5C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{6B428DB5-8B9B-48FA-8777-0C8D9A550E5C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{6B428DB5-8B9B-48FA-8777-0C8D9A550E5C}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{6B428DB5-8B9B-48FA-8777-0C8D9A550E5C}.Debug|x64.Build.0 = Debug|Any CPU
-		{6B428DB5-8B9B-48FA-8777-0C8D9A550E5C}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{6B428DB5-8B9B-48FA-8777-0C8D9A550E5C}.Debug|x86.Build.0 = Debug|Any CPU
-		{6B428DB5-8B9B-48FA-8777-0C8D9A550E5C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{6B428DB5-8B9B-48FA-8777-0C8D9A550E5C}.Release|Any CPU.Build.0 = Release|Any CPU
-		{6B428DB5-8B9B-48FA-8777-0C8D9A550E5C}.Release|x64.ActiveCfg = Release|Any CPU
-		{6B428DB5-8B9B-48FA-8777-0C8D9A550E5C}.Release|x64.Build.0 = Release|Any CPU
-		{6B428DB5-8B9B-48FA-8777-0C8D9A550E5C}.Release|x86.ActiveCfg = Release|Any CPU
-		{6B428DB5-8B9B-48FA-8777-0C8D9A550E5C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -7,14 +7,14 @@ You don't need to reference this package directly. It comes with the packages yo
 - [WebHop.Origin](https://www.nuget.org/packages/WebHop.Origin): serve your ASP.NET Core app through a gateway.
 - [WebHop.Gateway](https://www.nuget.org/packages/WebHop.Gateway): run the gateway.
 
-It's also the library behind [`webhop-gen`](https://www.nuget.org/packages/webhop-gen) and the token commands of [`webhop`](https://www.nuget.org/packages/webhop), so they and the gateway follow the same rules. Reference it to issue tokens from your own app, such as the admin pages of an app with an embedded gateway.
+It's also the library behind the token commands of [`webhop`](https://www.nuget.org/packages/webhop), so they and the gateway follow the same rules. Reference it to issue tokens from your own app, such as the admin pages of an app with an embedded gateway.
 
 ## Issuing
 
 ```csharp
 using WebHop.Core;
 
-// The private set, as webhop-gen issuer init wrote it
+// The private set, as webhop issuer init wrote it
 var keys = KeySet.Load("_.example.com.json");
 
 var token = keys.Issue(new TokenRequest

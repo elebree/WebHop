@@ -5,15 +5,15 @@ namespace WebHop.Core
 {
     /// <summary>
     /// The private key sets on this machine, one file per host their tokens are for, in a directory restricted
-    /// to the user: <c>%APPDATA%\webhop-gen</c> on Windows, <c>~/.config/webhop-gen</c> elsewhere. webhop-gen and
-    /// webhop share it. A wildcard host is written with <c>_</c> for <c>*</c>, which Windows allows in no file
-    /// name: <c>_.example.com.json</c> is the set for <c>*.example.com</c>. Beside each set, a log
+    /// to the user: <c>%APPDATA%\webhop\keys</c> on Windows, <c>~/.config/webhop/keys</c> elsewhere. A wildcard
+    /// host is written with <c>_</c> for <c>*</c>, which Windows allows in no file name:
+    /// <c>_.example.com.json</c> is the set for <c>*.example.com</c>. Beside each set, a log
     /// (<c>_.example.com.log</c>) lists the tokens issued from it, never the tokens themselves.
     /// </summary>
     public sealed class KeySetStore(string directory)
     {
         public static string DefaultDirectory { get; } =
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "webhop-gen");
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "webhop", "keys");
 
         public string Directory { get; } = directory;
 

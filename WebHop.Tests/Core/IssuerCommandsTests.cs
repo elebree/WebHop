@@ -265,9 +265,9 @@ namespace WebHop.Tests.Core
         [Test]
         public void Help_names_the_tool()
         {
-            Commands("webhop-gen").RunToken(["--help"]);
+            Commands("mytool").RunToken(["--help"]);
 
-            Assert.That(output.ToString(), Does.Contain("webhop-gen token issue"));
+            Assert.That(output.ToString(), Does.Contain("mytool token issue"));
         }
 
         private IssuerCommands Commands(string tool = "webhop")

@@ -1,8 +1,7 @@
 name: Release
 
-# Publishes WebHop.Core, WebHop.Origin, WebHop.Gateway and the webhop and webhop-gen tools to
-# nuget.org and GitHub Packages, and attaches their self-contained binaries to the GitHub
-# release.
+# Publishes WebHop.Core, WebHop.Origin, WebHop.Gateway and the webhop tool to nuget.org and
+# GitHub Packages, and attaches webhop's self-contained binaries to the GitHub release.
 #
 # Either way of releasing works:
 # - push a tag (git tag v2.1.0 && git push origin v2.1.0): the release is created with generated notes;
@@ -71,27 +70,22 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      # webhop-gen too: machines that issue tokens may allow it, but not a tunnel client
       - name: Publish
         run: |
-          for project in WebHop.CLI WebHop.Gen; do
-            dotnet publish $project -c Release -f net10.0 -p:TargetFrameworks=net10.0 -r ${{ matrix.rid }} \
-              -p:PublishAot=true -p:Version=${GITHUB_REF_NAME#v} -p:DebugType=none -o publish
-          done
+          dotnet publish WebHop.CLI -c Release -f net10.0 -p:TargetFrameworks=net10.0 -r ${{ matrix.rid }} \
+            -p:PublishAot=true -p:Version=${GITHUB_REF_NAME#v} -p:DebugType=none -o publish
 
       # Only the executables: the publish folder also gets aspnetcorev2_inprocess.dll (the IIS
       # module from the shared framework), which a console tool never loads.
       - name: Archive
         run: |
           mkdir dist
-          for tool in webhop webhop-gen; do
-            name="$tool-${{ matrix.rid }}"   # no version, so releases/latest/download/<name> stays a stable link
-            if [[ "${{ matrix.rid }}" == win-* ]]; then
-              7z a "dist/$name.zip" "./publish/$tool.exe"
-            else
-              tar -czf "dist/$name.tar.gz" -C publish "$tool"
-            fi
-          done
+          name="webhop-${{ matrix.rid }}"   # no version, so releases/latest/download/<name> stays a stable link
+          if [[ "${{ matrix.rid }}" == win-* ]]; then
+            7z a "dist/$name.zip" "./publish/webhop.exe"
+          else
+            tar -czf "dist/$name.tar.gz" -C publish webhop
+          fi
 
       - uses: actions/upload-artifact@v4
         with:

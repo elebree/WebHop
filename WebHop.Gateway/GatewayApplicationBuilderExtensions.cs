@@ -26,7 +26,7 @@ namespace Microsoft.AspNetCore.Builder
             if (authorization.Error is { } error)
                 logger.LogError("Cannot use the key set: {Error} The gateway accepts no tunnels until it's fixed", error.TrimEnd('.') + ".");
             else if (authorization.Keys is not { } keys)
-                logger.LogError("No key set: set {Variable} or the {Setting} setting to the public set from `webhop-gen issuer public`. The gateway accepts no tunnels until then",
+                logger.LogError("No key set: set {Variable} or the {Setting} setting to the public set from `webhop issuer public`. The gateway accepts no tunnels until then",
                     Constants.KeySetEnvironmentVariable, Constants.KeySetSetting);
             else
                 // Nobody can read the encoded form, so say what was loaded

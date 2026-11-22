@@ -65,8 +65,8 @@ namespace WebHop.Tests.Cli
         [Test]
         public void Unknown_flags_point_to_the_tools_help()
         {
-            var error = Assert.Throws<CliException>(() => CliArgs.Parse(["--bogus"], ValueFlags, BoolFlags, "webhop-gen"));
-            Assert.That(error.Message, Does.Contain("webhop-gen help"));
+            var error = Assert.Throws<CliException>(() => CliArgs.Parse(["--bogus"], ValueFlags, BoolFlags, "mytool"));
+            Assert.That(error.Message, Does.Contain("mytool help"));
         }
 
         [Test]

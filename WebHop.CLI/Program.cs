@@ -7,7 +7,7 @@ try
     return CommandFirst(args) switch
     {
         ["http", .. var rest] => HttpOptions.Parse(rest) is { } options ? await HttpCommand.RunAsync(options) : Help.Http(),
-        // The same commands as webhop-gen's, for machines where tunnels are allowed anyway
+        // Issuing tokens: the key sets that sign them, and the tokens themselves
         ["issuer", .. var rest] => IssuerCommands.Create("webhop").RunIssuer(rest),
         ["token", .. var rest] => IssuerCommands.Create("webhop").RunToken(rest),
         ["version" or "--version" or "-v"] => Help.Version(),
@@ -65,8 +65,8 @@ internal static class Help
 
             COMMANDS:
               http       start an HTTP tunnel to a local server
-              issuer     create and manage key sets, which sign origins' tokens (as webhop-gen)
-              token      issue and revoke origins' tokens (as webhop-gen)
+              issuer     create and manage key sets, which sign origins' tokens
+              token      issue and revoke origins' tokens
               version    print the version
               help       help about any command
 

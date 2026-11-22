@@ -23,7 +23,7 @@ namespace WebHop.CLI
         {
             var authToken = options.AuthToken ?? Environment.GetEnvironmentVariable(Constants.AuthTokenEnvironmentVariable);
             if (string.IsNullOrWhiteSpace(authToken))
-                throw new CliException($"No auth token. Pass --token or set {Constants.AuthTokenEnvironmentVariable}. The gateway's issuer makes one with `webhop-gen token issue`.");
+                throw new CliException($"No auth token. Pass --token or set {Constants.AuthTokenEnvironmentVariable}. The gateway's issuer makes one with `webhop token issue`.");
             if (!OriginToken.TryParse(authToken, out var token, out var problem))
                 throw new CliException($"The auth token can't be used: {problem}.");
 

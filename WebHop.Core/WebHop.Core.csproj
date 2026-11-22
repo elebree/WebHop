@@ -12,7 +12,6 @@
   <ItemGroup>
     <!-- The issuer and token commands, shared by both tools -->
     <InternalsVisibleTo Include="webhop" />
-    <InternalsVisibleTo Include="webhop-gen" />
     <InternalsVisibleTo Include="WebHop.Tests" />
   </ItemGroup>
 

@@ -1,5 +1,5 @@
 # The gateway. Set its public key set first, e.g. in a .env file next to this file:
-#   WEBHOP_KEYSET=<the whk_... that `webhop-gen issuer init <host>` prints>
+#   WEBHOP_KEYSET=<the whk_... that `webhop issuer init <host>` prints>
 # then: docker compose up --build   and open http://localhost:8080
 services:
   gateway:

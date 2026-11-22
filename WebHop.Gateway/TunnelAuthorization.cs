@@ -101,7 +101,7 @@ namespace WebHop.Gateway
 
             // Whoever holds a private key can issue tokens: it stays with the issuer
             if (set.IsPrivate)
-                throw new FormatException($"{source} holds a private key (d). Deploy the public set that `webhop-gen issuer public` prints; the private one stays with the issuer.");
+                throw new FormatException($"{source} holds a private key (d). Deploy the public set that `webhop issuer public` prints; the private one stays with the issuer.");
             return set;
         }
 

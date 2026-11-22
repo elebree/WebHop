@@ -3,8 +3,8 @@ using System.Globalization;
 namespace WebHop.Core.Commands
 {
     /// <summary>
-    /// The <c>issuer</c> (init, list, public, rotate) and <c>token</c> (issue, list, revoke) commands, the same
-    /// in webhop-gen and webhop. Values meant for other tools (a <c>whk_…</c> set, a <c>wh_…</c> token) go to
+    /// The <c>issuer</c> (init, list, public, rotate) and <c>token</c> (issue, list, revoke) commands of
+    /// webhop. Values meant for other tools (a <c>whk_…</c> set, a <c>wh_…</c> token) go to
     /// <c>output</c> alone, so they can be piped; what's said about them goes to <c>error</c>.
     /// </summary>
     internal sealed class IssuerCommands(string tool, KeySetStore store, TextWriter output, TextWriter error, Func<DateTimeOffset> clock)

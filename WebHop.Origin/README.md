@@ -40,7 +40,7 @@ The app reconnects on its own when the gateway restarts. Requests arrive with th
 
 ## Token
 
-The app refuses to start without a token. It comes from the `WEBHOP_TOKEN` environment variable, the `WebHop:AuthToken` configuration key, or `options.AuthToken`. Whoever issues tokens for the gateway makes one with `webhop-gen token issue`. Keep it out of `appsettings.json` in source control: whoever reads it can serve as your app until it expires or is revoked.
+The app refuses to start without a token. It comes from the `WEBHOP_TOKEN` environment variable, the `WebHop:AuthToken` configuration key, or `options.AuthToken`. Whoever issues tokens for the gateway makes one with `webhop token issue`. Keep it out of `appsettings.json` in source control: whoever reads it can serve as your app until it expires or is revoked.
 
 `WebHopServer.Status` says why the gateway refuses the token: `Unauthorized` (bad, expired or revoked), `Forbidden` (it doesn't serve the host the app connects to) or `Conflict` (another process serves the same origin id with a token for something else). The app keeps retrying, so it connects once the token is replaced.
 

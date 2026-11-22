@@ -63,7 +63,7 @@ namespace WebHop.Origin
                 throw new InvalidOperationException(
                     $"No WebHop auth token configured. Set {Constants.AuthTokenEnvironmentVariable}, the {Constants.AuthTokenSetting} setting or WebHopServerOptions.AuthToken.");
             if (!OriginToken.TryParse(options.AuthToken, out var token, out var problem))
-                throw new InvalidOperationException($"The WebHop auth token can't be used: {problem}. Issue one with `webhop-gen token issue`.");
+                throw new InvalidOperationException($"The WebHop auth token can't be used: {problem}. Issue one with `webhop token issue`.");
 
             var addresses = Features.Get<IServerAddressesFeature>()?.Addresses;
             // ASPNETCORE_HTTP_PORTS in container images adds http://*:8080, which names no gateway

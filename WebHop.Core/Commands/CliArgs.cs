@@ -4,7 +4,6 @@ namespace WebHop.Core.Commands
     /// ngrok-style arguments: positional words plus --flag value, --flag=value or -flag value,
     /// in any order. Boolean flags take no value unless written as --flag=true|false. A value flag
     /// may be repeated; <see cref="Get"/> reads the last, <see cref="GetAll"/> all of them.
-    /// Shared by webhop and webhop-gen.
     /// </summary>
     internal sealed class CliArgs
     {
